@@ -1,0 +1,257 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// ---------- Enums ----------
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum AnalysisStatus {
+  PENDING      // created, not started
+  CRAWLING     // Playwright crawling
+  ANALYZING    // vision + personas + focus group
+  COMPLETED
+  FAILED
+}
+
+enum TechnicalLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum DeviceType {
+  DESKTOP
+  MOBILE
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum ScreenshotType {
+  FULL_PAGE
+  VIEWPORT
+}
+
+// ---------- Models ----------
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique           // Clerk user ID
+  email     String   @unique
+  name      String?
+  role      UserRole @default(USER)
+
+  personas  Persona[]
+  analyses  Analysis[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clerkId])
+  @@index([role])
+}
+
+// Persona definitions: prebuilt library + user-defined/custom personas.
+// Prebuilt personas have isPrebuilt=true and ownerId = null.
+// Custom personas can be owned by a user and reused across analyses.
+model Persona {
+  id             String         @id @default(cuid())
+  ownerId        String?
+  owner          User?          @relation(fields: [ownerId], references: [id])
+
+  // Display / identity fields
+  label          String     @unique    // e.g. "Senior Citizen", "Software Developer"
+  name           String         // e.g. "Ramesh, retired banker"
+  age            Int
+  occupation     String
+  technicalLevel TechnicalLevel
+
+  // Core UX behavior context
+  goals          String         // long text describing goals
+  frustrations   String         // long text describing frustrations
+
+  // Management flags
+  isPrebuilt     Boolean        @default(false)
+  isActive       Boolean        @default(true)
+
+  // Optional categorization / extension
+  tags           String[]       @default([]) // PostgreSQL text[] for quick filtering
+  metadata       Json?          // any extra persona metadata (locale, device prefs, etc.)
+
+  analysisPersonas AnalysisPersona[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([ownerId])
+  @@index([isPrebuilt, isActive])
+}
+
+// A single analysis run started by a user for a given URL.
+// Ties together: pages crawled, persona evaluations, and focus group insight.
+model Analysis {
+  id          String         @id @default(cuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id])
+
+  url         String         // original URL submitted
+  normalizedHost String      // e.g. "example.com" for grouping
+  status      AnalysisStatus @default(PENDING)
+
+  // Crawl config snapshot for this run
+  deviceType  DeviceType     @default(DESKTOP)
+  maxDepth    Int            @default(2)
+  maxPages    Int            @default(8)
+
+  // Aggregated metrics for analytics dashboard
+  overallSentiment    SentimentLabel?
+  overallFrictionScore Int?          // 0–100 "how painful overall"
+  summary             String?        // short summarised insight for this run
+  meta                Json?          // arbitrary aggregated stats (sentiment breakdowns, etc.)
+
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pages       Page[]
+  personas    AnalysisPersona[]
+  focusGroup  FocusGroupInsight?
+
+  @@index([userId, createdAt])
+  @@index([normalizedHost])
+  @@index([status])
+}
+
+// Each crawled page (URL) within an analysis.
+// Contains structural metrics and machine understanding (vision/accessibility).
+model Page {
+  id             String    @id @default(cuid())
+  analysisId     String
+  analysis       Analysis  @relation(fields: [analysisId], references: [id])
+
+  url            String
+  path           String?   // path relative to origin, if easily derived
+  title          String?
+  depth          Int       // navigation depth from root (0 = root)
+
+  // Raw content (can be truncated or processed before insert to avoid bloat)
+  content        String?
+
+  // Structural metrics for evidence-based reasoning
+  formsCount     Int       @default(0)
+  buttonsCount   Int       @default(0)
+  linksCount     Int       @default(0)
+  textLength     Int       @default(0) // number of characters or tokens
+  hasAuthForm    Boolean   @default(false)
+  primaryActionLabel String?
+
+  // Performance / accessibility / layout metadata (JSONB via Prisma Json)
+  performance    Json?     // e.g. { lcpMs, fcpMs, tbtMs }
+  accessibility  Json?     // e.g. contrast issues, missing labels
+  navStructure   Json?     // simplified navigation tree
+  visionMeta     Json?     // Gemini Vision's structured UI/layout description
+
+  // Per-page friction signal for heatmap-like views
+  frictionScore  Int?      // 0–100
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  screenshots    Screenshot[]
+
+  @@index([analysisId, depth])
+  @@index([url])
+}
+
+// Screenshot captured via Playwright and stored on ImageKit.
+// We only store CDN URL + some basic metadata.
+model Screenshot {
+  id         String         @id @default(cuid())
+  pageId     String
+  page       Page           @relation(fields: [pageId], references: [id])
+
+  cdnUrl     String         // ImageKit URL
+  type       ScreenshotType @default(FULL_PAGE)
+  width      Int?
+  height     Int?
+
+  createdAt  DateTime       @default(now())
+
+  @@index([pageId])
+}
+
+// Join model for "this persona evaluated this analysis".
+// Stores a snapshot of persona attributes + AI evaluation results.
+model AnalysisPersona {
+  id              String      @id @default(cuid())
+  analysisId      String
+  analysis        Analysis    @relation(fields: [analysisId], references: [id])
+  personaId       String?
+  persona         Persona?    @relation(fields: [personaId], references: [id])
+
+  // Snapshot of persona attributes at analysis time (so changes later don't affect old runs)
+  label           String      // persona label at the time of analysis
+  name            String
+  age             Int
+  occupation      String
+  technicalLevel  TechnicalLevel
+  goals           String
+  frustrations    String
+
+  // AI evaluation outputs for this persona
+  firstImpressions   String?   // high-level first reaction
+  positives          String?   // serialized list/markdown of positives
+  painPoints         String?   // serialized list/markdown of pain points
+  recommendations    String?   // serialized list/markdown of suggestions
+  accessibilityNotes String?   // persona-specific accessibility feedback
+
+  adoptionLikelihood Int?      // 0–100
+  sentiment          SentimentLabel?
+  frictionScore      Int?      // 0–100, persona-specific friction metric
+
+  // Evidence-based reasoning support:
+  // e.g. list of { issue, confidence, reason, support: { formsCount, buttonsCount, navigationDepth } }
+  evidence           Json?
+
+  // Optional full raw model JSON before parsing, for debugging/re-analysis
+  rawModelOutput     Json?
+
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([analysisId])
+  @@index([personaId])
+  @@index([sentiment])
+}
+
+// Synthetic focus group discussion result for an analysis.
+// Captures disagreements, consensus, and segment explanations.
+model FocusGroupInsight {
+  id         String   @id @default(cuid())
+  analysisId String   @unique
+  analysis   Analysis @relation(fields: [analysisId], references: [id])
+
+  summary    String   // narrative summary from AI moderator
+  conflicts  Json     // e.g. { items: [{ topic, personasAgree, personasDisagree, reason, segmentExplanation }] }
+
+  createdAt  DateTime @default(now())
+}

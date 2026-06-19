@@ -81,6 +81,7 @@ export default function RootLayout({
               </nav>
             </div>
           </header>
+          {children}
         </ClerkProvider>
       </body>
     </html>

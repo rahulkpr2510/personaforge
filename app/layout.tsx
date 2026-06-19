@@ -1,6 +1,18 @@
+import {
+  ClerkProvider,
+  Show,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
+import { cn } from "@/lib/utils";
+import { shadcn } from "@clerk/ui/themes";
+import Link from "next/link";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,9 +37,52 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={cn(
+        "h-full",
+        "antialiased",
+        geistSans.variable,
+        geistMono.variable,
+        "font-sans",
+        inter.variable,
+      )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ClerkProvider appearance={{ theme: shadcn }}>
+          <header className="border-b bg-white">
+            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+              <Link href="/" className="text-lg font-semibold">
+                PersonaForge
+              </Link>
+
+              <nav className="flex items-center gap-4 text-sm">
+                <Show when="signed-in">
+                  <Link href="/dashboard" className="hover:underline">
+                    Dashboard
+                  </Link>
+
+                  <Link href="/admin/personas" className="hover:underline">
+                    Admin
+                  </Link>
+
+                  <UserButton />
+                </Show>
+
+                <Show when="signed-out">
+                  <SignInButton mode="modal">
+                    <button className="hover:underline">Sign In</button>
+                  </SignInButton>
+
+                  <SignUpButton mode="modal">
+                    <button className="rounded-md bg-black px-3 py-2 text-white">
+                      Sign Up
+                    </button>
+                  </SignUpButton>
+                </Show>
+              </nav>
+            </div>
+          </header>
+        </ClerkProvider>
+      </body>
     </html>
   );
 }

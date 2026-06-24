@@ -5,15 +5,23 @@ import { db } from "@/lib/db";
 export async function GET() {
   try {
     const user = await requireAuth();
-    const analyses = await db.analysis.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: { select: { pages: true, personas: true } },
-        focusGroup: { select: { id: true } },
-      },
-    });
-    return NextResponse.json({ analyses });
+    try {
+      const analyses = await db.analysis.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        include: {
+          _count: { select: { pages: true, personas: true } },
+          focusGroup: { select: { id: true } },
+        },
+      });
+      return NextResponse.json({ analyses });
+    } catch (dbErr) {
+      console.error("[GET /api/analyses] DB error:", dbErr);
+      return NextResponse.json(
+        { error: "Internal server error" },
+        { status: 500 },
+      );
+    }
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -63,6 +71,20 @@ export async function POST(req: Request) {
       normalizedHost = new URL(url).hostname;
     } catch {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
+    }
+
+    const recentCount = await db.analysis.count({
+      where: {
+        userId: user.id,
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // last 1 hour
+        status: { not: "FAILED" },
+      },
+    });
+    if (recentCount >= 5) {
+      return NextResponse.json(
+        { error: "Rate limit: max 5 analyses per hour" },
+        { status: 429 },
+      );
     }
 
     // Store persona config in meta so the callback can pick it up

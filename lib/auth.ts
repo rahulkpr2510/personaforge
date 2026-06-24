@@ -1,45 +1,31 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { prisma } from "./db";
-import { UserRole } from "@prisma/client";
+import { db } from "./db";
 
-export async function syncUserWithDatabase() {
+export async function getOrCreateUser() {
   const { userId } = await auth();
   if (!userId) return null;
 
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
-  const email =
-    clerkUser.emailAddresses[0]?.emailAddress ??
-    `missing-email-${clerkUser.id}@local`;
-  const name =
-    `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim();
+  let user = await db.user.findUnique({ where: { clerkId: userId } });
 
-  const user = await prisma.user.upsert({
-    where: { clerkId: clerkUser.id },
-    update: {
-      email,
-      name,
-    },
-    create: {
-      clerkId: clerkUser.id,
-      email,
-      name,
-      role: UserRole.USER, // you can manually promote to ADMIN via DB later
-    },
-  });
-
-  return user;
-}
-
-export async function requireUser() {
-  const user = await syncUserWithDatabase();
   if (!user) {
-    throw new Error("Unauthorized");
+    user = await db.user.create({
+      data: {
+        clerkId: userId,
+        email: clerkUser.emailAddresses[0].emailAddress,
+        name:
+          `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() ||
+          null,
+      },
+    });
   }
   return user;
 }
 
-export function isAdmin(user: { role: UserRole }) {
-  return user.role === "ADMIN";
+export async function requireAuth() {
+  const user = await getOrCreateUser();
+  if (!user) throw new Error("Unauthorized");
+  return user;
 }

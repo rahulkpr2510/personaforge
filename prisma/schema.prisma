@@ -76,7 +76,7 @@ model Persona {
   owner          User?          @relation(fields: [ownerId], references: [id])
 
   // Display / identity fields
-  label          String     @unique    // e.g. "Senior Citizen", "Software Developer"
+  label  String    // e.g. "Senior Citizen", "Software Developer"
   name           String         // e.g. "Ramesh, retired banker"
   age            Int
   occupation     String
@@ -99,6 +99,7 @@ model Persona {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
+  @@unique([ownerId, label])
   @@index([ownerId])
   @@index([isPrebuilt, isActive])
 }

@@ -11,6 +11,12 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { shadcn } from "@clerk/ui/themes";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const Agentation = dynamic(
+  () => import("agentation").then((mod) => mod.Agentation),
+  { ssr: false }
+);
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -82,6 +88,7 @@ export default function RootLayout({
             </div>
           </header>
           {children}
+          {process.env.NODE_ENV === "development" && <Agentation />}
         </ClerkProvider>
       </body>
     </html>

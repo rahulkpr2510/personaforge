@@ -3,20 +3,33 @@ import type { PersonaEvaluation, PersonaContext } from "../types";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
-const MASTER_PROMPT = `You are simulating a UX evaluation by a specific user persona. Stay fully in character.
+/**
+ * Builds the master prompt by replacing placeholders.
+ * Template values are stripped of backtick/brace injection chars before insertion.
+ */
+function buildPrompt(
+  persona: PersonaContext,
+  siteContext: Record<string, unknown>,
+): string {
+  const safe = (v: unknown, max = 500) =>
+    String(v)
+      .replace(/[`{}\\]/g, "")
+      .slice(0, max);
+
+  return `You are simulating a UX evaluation by a specific user persona. Stay fully in character.
 
 PERSONA:
-Name: {name} | Age: {age} | Occupation: {occupation}
-Technical Literacy: {technicalLevel}
-Goals: {goals}
-Frustrations: {frustrations}
+Name: ${safe(persona.name, 80)} | Age: ${safe(persona.age, 3)} | Occupation: ${safe(persona.occupation, 100)}
+Technical Literacy: ${safe(persona.technicalLevel, 10)}
+Goals: ${safe(persona.goals, 500)}
+Frustrations: ${safe(persona.frustrations, 500)}
 
 WEBSITE EVIDENCE:
-URL: {url}
-Pages Crawled: {pageCount}
-Total Forms: {formsCount} | Total Buttons: {buttonsCount} | Nav Depth: {navDepth}
-Vision Summary: {visionSummary}
-Page Content Sample: {contentSample}
+URL: ${safe(siteContext.url, 2048)}
+Pages Crawled: ${safe(siteContext.pageCount, 3)}
+Total Forms: ${safe(siteContext.formsCount, 5)} | Total Buttons: ${safe(siteContext.buttonsCount, 5)} | Nav Depth: ${safe(siteContext.navDepth, 3)}
+Vision Summary: ${safe(siteContext.visionSummary, 800)}
+Page Content Sample: ${safe(siteContext.contentSample, 1500)}
 
 Evaluate this website from YOUR persona's perspective. Respond with a JSON object:
 {
@@ -39,28 +52,27 @@ Evaluate this website from YOUR persona's perspective. Respond with a JSON objec
 }
 
 Base EVERY finding on specific evidence from the website data. Avoid generic opinions.`;
+}
+
+const FALLBACK_EVALUATION: PersonaEvaluation = {
+  sentiment: "NEUTRAL",
+  frictionScore: 50,
+  adoptionLikelihood: 50,
+  firstImpressions:
+    "Evaluation unavailable for this persona due to a service error.",
+  positives: [],
+  painPoints: [],
+  recommendations: [],
+  evidence: [],
+};
 
 export async function evaluatePersona(
   persona: PersonaContext,
   siteContext: Record<string, unknown>,
 ): Promise<PersonaEvaluation> {
-  const prompt = MASTER_PROMPT.replace("{name}", persona.name)
-    .replace("{age}", String(persona.age))
-    .replace("{occupation}", persona.occupation)
-    .replace("{technicalLevel}", persona.technicalLevel)
-    .replace("{goals}", persona.goals)
-    .replace("{frustrations}", persona.frustrations)
-    .replace("{url}", String(siteContext.url))
-    .replace("{pageCount}", String(siteContext.pageCount))
-    .replace("{formsCount}", String(siteContext.formsCount))
-    .replace("{buttonsCount}", String(siteContext.buttonsCount))
-    .replace("{navDepth}", String(siteContext.navDepth))
-    .replace("{visionSummary}", String(siteContext.visionSummary))
-    .replace(
-      "{contentSample}",
-      String(siteContext.contentSample).slice(0, 1500),
-    );
+  const prompt = buildPrompt(persona, siteContext);
 
+  // Primary: Groq
   try {
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
@@ -71,44 +83,84 @@ export async function evaluatePersona(
     });
 
     const raw = completion.choices[0].message.content ?? "{}";
-    return JSON.parse(raw) as PersonaEvaluation;
-  } catch (err) {
-    console.error(
-      "[persona-engine] Groq failed, trying OpenRouter fallback:",
-      err,
+    const parsed = JSON.parse(raw) as PersonaEvaluation;
+    // Clamp numeric fields so bad model output doesn't corrupt DB
+    if (parsed.frictionScore != null)
+      parsed.frictionScore = Math.min(100, Math.max(0, parsed.frictionScore));
+    if (parsed.adoptionLikelihood != null)
+      parsed.adoptionLikelihood = Math.min(
+        100,
+        Math.max(0, parsed.adoptionLikelihood),
+      );
+    return parsed;
+  } catch (groqErr) {
+    console.error("[persona-engine] Groq failed:", (groqErr as Error).message);
+  }
+
+  // Fallback: OpenRouter
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.warn("[persona-engine] No OPENROUTER_API_KEY — returning fallback");
+    return FALLBACK_EVALUATION;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://personaforge.vercel.app",
+          "X-Title": "PersonaForge",
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-3.3-70b-instruct",
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      },
     );
-    return evaluatePersonaFallback(prompt);
+
+    clearTimeout(timeout);
+
+    if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
+
+    const data = (await response.json()) as {
+      choices: Array<{ message: { content: string } }>;
+    };
+    return JSON.parse(data.choices[0].message.content) as PersonaEvaluation;
+  } catch (orErr) {
+    console.error(
+      "[persona-engine] OpenRouter fallback also failed:",
+      (orErr as Error).message,
+    );
+    return FALLBACK_EVALUATION;
   }
 }
 
-async function evaluatePersonaFallback(
-  prompt: string,
-): Promise<PersonaEvaluation> {
-  // OpenRouter fallback using OpenAI-compatible API
-  const response = await fetch(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "meta-llama/llama-3.3-70b-instruct",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-      }),
-    },
-  );
-  const data = (await response.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
-  return JSON.parse(data.choices[0].message.content) as PersonaEvaluation;
-}
-
+/**
+ * Runs all persona evaluations in parallel.
+ * Uses allSettled so one failure never kills the entire analysis.
+ */
 export async function runParallelEvaluations(
   personas: PersonaContext[],
   siteContext: Record<string, unknown>,
 ): Promise<PersonaEvaluation[]> {
-  return Promise.all(personas.map((p) => evaluatePersona(p, siteContext)));
+  const results = await Promise.allSettled(
+    personas.map((p) => evaluatePersona(p, siteContext)),
+  );
+
+  return results.map((r, i) => {
+    if (r.status === "fulfilled") return r.value;
+    console.error(
+      `[persona-engine] Persona "${personas[i].label}" failed:`,
+      r.reason,
+    );
+    return { ...FALLBACK_EVALUATION };
+  });
 }

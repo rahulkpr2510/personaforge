@@ -78,3 +78,14 @@ export type AggregatedInsights = {
   topPositives: string[];
   topRecommendations: string[];
 };
+
+export interface VisionAnalysis {
+  uiStructure: string;
+  layoutHierarchy: string;
+  visualComplexity: "low" | "medium" | "high";
+  formComplexity: "simple" | "moderate" | "complex";
+  accessibilityObservations: string[];
+  navigationPatterns: string;
+  interfaceElements: string[];
+  primaryPurpose: string;
+}

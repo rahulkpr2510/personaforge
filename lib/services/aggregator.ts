@@ -3,6 +3,18 @@ import type { PersonaEvaluationWithLabel, AggregatedInsights } from "../types";
 export function aggregateInsights(
   evaluations: PersonaEvaluationWithLabel[],
 ): AggregatedInsights {
+  if (evaluations.length === 0) {
+    return {
+      overallSentiment: "NEUTRAL",
+      overallFrictionScore: 0,
+      avgAdoptionLikelihood: 0,
+      sentimentBreakdown: { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 },
+      topPainPoints: [],
+      topPositives: [],
+      topRecommendations: [],
+    };
+  }
+
   const sentimentCounts = { POSITIVE: 0, NEUTRAL: 0, NEGATIVE: 0 };
   let totalFriction = 0;
   let totalAdoption = 0;
@@ -11,7 +23,8 @@ export function aggregateInsights(
   const allRecommendations: string[] = [];
 
   for (const e of evaluations) {
-    if (e.sentiment) sentimentCounts[e.sentiment]++;
+    const sentiment = e.sentiment ?? "NEUTRAL";
+    sentimentCounts[sentiment]++;
     totalFriction += e.frictionScore ?? 50;
     totalAdoption += e.adoptionLikelihood ?? 50;
     allPainPoints.push(...(e.painPoints ?? []));
@@ -19,9 +32,11 @@ export function aggregateInsights(
     allRecommendations.push(...(e.recommendations ?? []));
   }
 
-  const dominant = Object.entries(sentimentCounts).sort(
-    (a, b) => b[1] - a[1],
-  )[0][0] as "POSITIVE" | "NEUTRAL" | "NEGATIVE";
+  const dominant = (
+    Object.entries(sentimentCounts) as Array<
+      [keyof typeof sentimentCounts, number]
+    >
+  ).sort((a, b) => b[1] - a[1])[0][0];
 
   return {
     overallSentiment: dominant,
@@ -36,10 +51,13 @@ export function aggregateInsights(
 
 function deduplicateItems(items: string[]): string[] {
   const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = item.toLowerCase().slice(0, 40);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const result: string[] = [];
+  for (const item of items) {
+    const key = item.trim().toLowerCase();
+    if (key.length > 0 && !seen.has(key)) {
+      seen.add(key);
+      result.push(item.trim());
+    }
+  }
+  return result;
 }

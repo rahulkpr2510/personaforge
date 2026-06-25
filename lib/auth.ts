@@ -8,24 +8,25 @@ export async function getOrCreateUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
-  let user = await db.user.findUnique({ where: { clerkId: userId } });
+  const email = clerkUser.emailAddresses[0]?.emailAddress;
+  if (!email) return null;
 
-  if (!user) {
-    user = await db.user.create({
-      data: {
-        clerkId: userId,
-        email: clerkUser.emailAddresses[0].emailAddress,
-        name:
-          `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() ||
-          null,
-      },
-    });
-  }
-  return user;
+  const name =
+    `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim() || null;
+
+  return db.user.upsert({
+    where: { clerkId: userId },
+    create: { clerkId: userId, email, name },
+    update: { email, name },
+  });
 }
 
 export async function requireAuth() {
   const user = await getOrCreateUser();
-  if (!user) throw new Error("Unauthorized");
+  if (!user) {
+    const err = new Error("Unauthorized");
+    (err as NodeJS.ErrnoException).code = "UNAUTHORIZED";
+    throw err;
+  }
   return user;
 }

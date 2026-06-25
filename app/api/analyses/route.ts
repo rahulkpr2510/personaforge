@@ -1,93 +1,105 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { CreateAnalysisSchema } from "@/lib/validation/schemas";
+import { Limits } from "@/lib/rate-limit";
 
 export async function GET() {
   try {
     const user = await requireAuth();
-    try {
-      const analyses = await db.analysis.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        include: {
-          _count: { select: { pages: true, personas: true } },
-          focusGroup: { select: { id: true } },
-        },
-      });
-      return NextResponse.json({ analyses });
-    } catch (dbErr) {
-      console.error("[GET /api/analyses] DB error:", dbErr);
-      return NextResponse.json(
-        { error: "Internal server error" },
-        { status: 500 },
-      );
+
+    const analyses = await db.analysis.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        url: true,
+        normalizedHost: true,
+        status: true,
+        deviceType: true,
+        overallSentiment: true,
+        overallFrictionScore: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        error: true,
+        _count: { select: { pages: true, personas: true } },
+        focusGroup: { select: { id: true } },
+      },
+    });
+
+    return NextResponse.json({ analyses });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    console.error("[GET /api/analyses]:", err);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(req: Request) {
   try {
     const user = await requireAuth();
-    const body = (await req.json()) as {
-      url: string;
-      personaIds?: string[];
-      customPersonas?: Array<{
-        name: string;
-        age: number;
-        occupation: string;
-        technicalLevel: string;
-        goals: string;
-        frustrations: string;
-      }>;
-      deviceType?: "DESKTOP" | "MOBILE";
-    };
 
-    const {
-      url,
-      personaIds = [],
-      customPersonas = [],
-      deviceType = "DESKTOP",
-    } = body;
-
-    if (!url)
-      return NextResponse.json({ error: "URL is required" }, { status: 400 });
-
-    const totalPersonas = personaIds.length + customPersonas.length;
-    if (totalPersonas === 0)
+    // Rate limit: 5 analyses per hour per user
+    const rl = Limits.createAnalysis(user.id);
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: "At least 1 persona required" },
-        { status: 400 },
-      );
-    if (totalPersonas > 5)
-      return NextResponse.json(
-        { error: "Maximum 5 personas allowed" },
-        { status: 400 },
-      );
-
-    let normalizedHost: string;
-    try {
-      normalizedHost = new URL(url).hostname;
-    } catch {
-      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
-    }
-
-    const recentCount = await db.analysis.count({
-      where: {
-        userId: user.id,
-        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // last 1 hour
-        status: { not: "FAILED" },
-      },
-    });
-    if (recentCount >= 5) {
-      return NextResponse.json(
-        { error: "Rate limit: max 5 analyses per hour" },
-        { status: 429 },
+        { error: "Rate limit: maximum 5 analyses per hour" },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+            "X-RateLimit-Limit": "5",
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rl.resetAt),
+          },
+        },
       );
     }
 
-    // Store persona config in meta so the callback can pick it up
+    // Parse and validate with Zod — rejects invalid/malicious input
+    const raw = await req.json().catch(() => null);
+    if (!raw) {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    const parsed = CreateAnalysisSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: "Validation failed",
+          details: parsed.error.flatten().fieldErrors,
+        },
+        { status: 400 },
+      );
+    }
+
+    const { url, personaIds, customPersonas, deviceType } = parsed.data;
+    const normalizedHost = new URL(url).hostname.toLowerCase();
+
+    // Guard: crawler service must be configured before accepting jobs
+    if (!process.env.CRAWLER_SERVICE_URL || !process.env.CRAWLER_SECRET) {
+      console.error("[POST /api/analyses] Crawler env vars missing");
+      return NextResponse.json(
+        { error: "Analysis service is not configured" },
+        { status: 503 },
+      );
+    }
+
+    // Guard: INTERNAL_SECRET must be set or crawl-complete callback is open
+    if (!process.env.INTERNAL_SECRET) {
+      console.error("[POST /api/analyses] INTERNAL_SECRET missing");
+      return NextResponse.json(
+        { error: "Service misconfigured" },
+        { status: 503 },
+      );
+    }
+
     const analysis = await db.analysis.create({
       data: {
         userId: user.id,
@@ -99,25 +111,33 @@ export async function POST(req: Request) {
       },
     });
 
-    // Fire off crawler service (non-blocking)
+    // Fire-and-forget: dispatch to crawler service
     fetch(`${process.env.CRAWLER_SERVICE_URL}/crawl`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-crawler-secret": process.env.CRAWLER_SECRET!,
+        "x-crawler-secret": process.env.CRAWLER_SECRET,
       },
-      body: JSON.stringify({ url, analysisId: analysis.id, deviceType }),
-    }).catch((err) => {
-      console.error("[POST /api/analyses] Crawler dispatch failed:", err);
-      db.analysis
+      body: JSON.stringify({
+        url,
+        analysisId: analysis.id,
+        deviceType,
+        callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/internal/crawl-complete`,
+        callbackSecret: process.env.INTERNAL_SECRET,
+      }),
+    }).catch(async (dispatchErr) => {
+      console.error(
+        "[POST /api/analyses] Crawler dispatch failed:",
+        dispatchErr,
+      );
+      await db.analysis
         .update({
           where: { id: analysis.id },
-          data: { status: "FAILED", error: "Crawler unreachable" },
+          data: { status: "FAILED", error: "Crawler service unreachable" },
         })
         .catch(console.error);
     });
 
-    // Mark as CRAWLING immediately after dispatch
     await db.analysis.update({
       where: { id: analysis.id },
       data: { status: "CRAWLING", startedAt: new Date() },
@@ -128,6 +148,9 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("[POST /api/analyses]:", err);
     return NextResponse.json(
       { error: "Internal server error" },

@@ -112,20 +112,19 @@ model Analysis {
   userId      String
   user        User           @relation(fields: [userId], references: [id])
 
-  url         String         // original URL submitted
-  normalizedHost String      // e.g. "example.com" for grouping
+  url         String
+  normalizedHost String
   status      AnalysisStatus @default(PENDING)
 
-  // Crawl config snapshot for this run
   deviceType  DeviceType     @default(DESKTOP)
   maxDepth    Int            @default(2)
   maxPages    Int            @default(8)
 
-  // Aggregated metrics for analytics dashboard
-  overallSentiment    SentimentLabel?
-  overallFrictionScore Int?          // 0–100 "how painful overall"
-  summary             String?        // short summarised insight for this run
-  meta                Json?          // arbitrary aggregated stats (sentiment breakdowns, etc.)
+  overallSentiment     SentimentLabel?
+  overallFrictionScore Int?
+  summary              String?
+  analysisInput        Json?   // ← ADD THIS: stores { personaIds, customPersonas, deviceType } — write once
+  meta                 Json?   // aggregated output only — written at COMPLETED
 
   error       String?
   startedAt   DateTime?

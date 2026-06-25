@@ -50,9 +50,10 @@ export async function POST(req: Request) {
     );
   }
 
+  // ── ✅ FIX: select analysisInput, not meta ──────────────────────────────────
   const analysis = await db.analysis.findUnique({
     where: { id: analysisId },
-    select: { id: true, status: true, url: true, meta: true },
+    select: { id: true, status: true, url: true, analysisInput: true },
   });
 
   if (!analysis) {
@@ -107,7 +108,6 @@ export async function POST(req: Request) {
 
         const vpUrl = p.screenshots.find((s) => s.type === "VIEWPORT")?.cdnUrl;
 
-        // ✅ Fix: type as VisionAnalysis | null — cast to InputJsonValue only at DB write
         let visionMeta: VisionAnalysis | null = null;
 
         if (vpUrl) {
@@ -120,7 +120,6 @@ export async function POST(req: Request) {
               },
             });
           } catch (visionErr) {
-            // Vision failure is non-fatal — log and continue
             console.warn(
               `[crawl-complete] Vision failed for ${p.url}:`,
               (visionErr as Error).message,
@@ -133,7 +132,8 @@ export async function POST(req: Request) {
     );
 
     // ── Phase 2: Build persona contexts ─────────────────────────────────────
-    const personaMeta = analysis.meta as {
+    // ✅ FIX: read from analysisInput (immutable), NOT meta
+    const personaMeta = analysis.analysisInput as {
       personaIds: string[];
       customPersonas: Array<{
         name: string;
@@ -191,13 +191,12 @@ export async function POST(req: Request) {
       contentSample: result.pages[0]?.content?.slice(0, 2000) ?? "",
     };
 
-    // ── Phase 3: Parallel persona evaluations (allSettled — never fails) ─────
+    // ── Phase 3: Parallel persona evaluations ────────────────────────────────
     const evaluations = await runParallelEvaluations(
       allPersonaContexts,
       siteContext,
     );
 
-    // Write persona records in parallel
     await Promise.all(
       allPersonaContexts.map((ctx, i) => {
         const ev = evaluations[i];

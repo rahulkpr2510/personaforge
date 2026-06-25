@@ -7,37 +7,17 @@ import { Limits } from "@/lib/rate-limit";
 export async function GET() {
   try {
     const user = await requireAuth();
-
     const analyses = await db.analysis.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        url: true,
-        normalizedHost: true,
-        status: true,
-        deviceType: true,
-        overallSentiment: true,
-        overallFrictionScore: true,
-        startedAt: true,
-        completedAt: true,
-        createdAt: true,
-        error: true,
+      include: {
         _count: { select: { pages: true, personas: true } },
         focusGroup: { select: { id: true } },
       },
     });
-
     return NextResponse.json({ analyses });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    console.error("[GET /api/analyses]:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
 
@@ -45,24 +25,14 @@ export async function POST(req: Request) {
   try {
     const user = await requireAuth();
 
-    // Rate limit: 5 analyses per hour per user
     const rl = Limits.createAnalysis(user.id);
     if (!rl.allowed) {
       return NextResponse.json(
-        { error: "Rate limit: maximum 5 analyses per hour" },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
-            "X-RateLimit-Limit": "5",
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(rl.resetAt),
-          },
-        },
+        { error: "Rate limit exceeded. Try again later.", resetAt: rl.resetAt },
+        { status: 429 },
       );
     }
 
-    // Parse and validate with Zod — rejects invalid/malicious input
     const raw = await req.json().catch(() => null);
     if (!raw) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
@@ -80,26 +50,15 @@ export async function POST(req: Request) {
     }
 
     const { url, personaIds, customPersonas, deviceType } = parsed.data;
-    const normalizedHost = new URL(url).hostname.toLowerCase();
 
-    // Guard: crawler service must be configured before accepting jobs
-    if (!process.env.CRAWLER_SERVICE_URL || !process.env.CRAWLER_SECRET) {
-      console.error("[POST /api/analyses] Crawler env vars missing");
-      return NextResponse.json(
-        { error: "Analysis service is not configured" },
-        { status: 503 },
-      );
+    let normalizedHost: string;
+    try {
+      normalizedHost = new URL(url).hostname;
+    } catch {
+      return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
     }
 
-    // Guard: INTERNAL_SECRET must be set or crawl-complete callback is open
-    if (!process.env.INTERNAL_SECRET) {
-      console.error("[POST /api/analyses] INTERNAL_SECRET missing");
-      return NextResponse.json(
-        { error: "Service misconfigured" },
-        { status: 503 },
-      );
-    }
-
+    // Create analysis record — store persona selection in analysisInput (immutable)
     const analysis = await db.analysis.create({
       data: {
         userId: user.id,
@@ -107,54 +66,66 @@ export async function POST(req: Request) {
         normalizedHost,
         deviceType,
         status: "PENDING",
-        meta: { personaIds, customPersonas },
+        analysisInput: { personaIds, customPersonas, deviceType },
       },
     });
 
-    // Fire-and-forget: dispatch to crawler service
-    fetch(`${process.env.CRAWLER_SERVICE_URL}/crawl`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-crawler-secret": process.env.CRAWLER_SECRET,
-      },
-      body: JSON.stringify({
-        url,
-        analysisId: analysis.id,
-        deviceType,
-        callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/internal/crawl-complete`,
-        callbackSecret: process.env.INTERNAL_SECRET,
-      }),
-    }).catch(async (dispatchErr) => {
+    // Fire-and-forget to crawler service — do NOT await
+    triggerCrawler(analysis.id, url, deviceType).catch((err) => {
       console.error(
-        "[POST /api/analyses] Crawler dispatch failed:",
-        dispatchErr,
+        `[analyses] Failed to trigger crawler for ${analysis.id}:`,
+        err,
       );
-      await db.analysis
+      db.analysis
         .update({
           where: { id: analysis.id },
-          data: { status: "FAILED", error: "Crawler service unreachable" },
+          data: {
+            status: "FAILED",
+            error: "Failed to trigger crawler service",
+          },
         })
         .catch(console.error);
     });
 
-    await db.analysis.update({
-      where: { id: analysis.id },
-      data: { status: "CRAWLING", startedAt: new Date() },
-    });
-
     return NextResponse.json(
-      { analysisId: analysis.id, status: "CRAWLING" },
+      { analysisId: analysis.id, status: "PENDING" },
       { status: 201 },
     );
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
     console.error("[POST /api/analyses]:", err);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },
     );
+  }
+}
+
+async function triggerCrawler(
+  analysisId: string,
+  url: string,
+  deviceType: "DESKTOP" | "MOBILE",
+) {
+  const crawlerUrl = process.env.CRAWLER_SERVICE_URL;
+  if (!crawlerUrl) throw new Error("CRAWLER_SERVICE_URL is not set");
+
+  const res = await fetch(`${crawlerUrl}/crawl`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-internal-secret": process.env.INTERNAL_SECRET ?? "",
+    },
+    body: JSON.stringify({
+      analysisId,
+      url,
+      deviceType,
+      maxDepth: 2,
+      maxPages: 8,
+      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/internal/crawl-complete`,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Crawler responded ${res.status}: ${body}`);
   }
 }

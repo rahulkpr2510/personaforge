@@ -6,67 +6,78 @@ import { analyzeScreenshot } from "@/lib/services/vision";
 import { runParallelEvaluations } from "@/lib/services/persona-engine";
 import { runFocusGroup } from "@/lib/services/focus-group";
 import { aggregateInsights } from "@/lib/services/aggregator";
-import type { PersonaContext, PersonaEvaluationWithLabel } from "@/lib/types";
+import { CrawlCompletePayloadSchema } from "@/lib/validation/schemas";
+import { Limits } from "@/lib/rate-limit";
+import type {
+  PersonaContext,
+  PersonaEvaluationWithLabel,
+  VisionAnalysis,
+} from "@/lib/types";
 
-export const maxDuration = 300; // Vercel Pro: 5 min for AI pipeline
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
+  // ── Auth: validate internal secret ─────────────────────────────────────────
   const headersList = await headers();
-  if (headersList.get("x-internal-secret") !== process.env.INTERNAL_SECRET) {
+  const secret = headersList.get("x-internal-secret");
+
+  if (!process.env.INTERNAL_SECRET || secret !== process.env.INTERNAL_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { analysisId, result } = (await req.json()) as {
-    analysisId: string;
-    result: {
-      pages: Array<{
-        url: string;
-        depth: number;
-        title: string;
-        content: string;
-        metrics: {
-          formsCount: number;
-          buttonsCount: number;
-          linksCount: number;
-          textLength: number;
-          hasAuthForm: boolean;
-          primaryActionLabel: string | null;
-          navStructure: Array<{ text: string | undefined; href: string }>;
-        };
-        links: string[];
-        screenshots: Array<{ cdnUrl: string; type: "FULL_PAGE" | "VIEWPORT" }>;
-      }>;
-    };
-  };
+  // ── Parse + validate payload ────────────────────────────────────────────────
+  const raw = await req.json().catch(() => null);
+  if (!raw) {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = CrawlCompletePayloadSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid payload", details: parsed.error.flatten().fieldErrors },
+      { status: 400 },
+    );
+  }
+
+  const { analysisId, result } = parsed.data;
+
+  // ── Idempotency guard ───────────────────────────────────────────────────────
+  const rl = Limits.internalCrawlComplete(analysisId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many retries for this analysis" },
+      { status: 429 },
+    );
+  }
+
+  const analysis = await db.analysis.findUnique({
+    where: { id: analysisId },
+    select: { id: true, status: true, url: true, meta: true },
+  });
+
+  if (!analysis) {
+    return NextResponse.json({ error: "Analysis not found" }, { status: 404 });
+  }
+
+  // Already processed — return 200 so the crawler doesn't retry
+  if (analysis.status === "COMPLETED" || analysis.status === "ANALYZING") {
+    return NextResponse.json({ skipped: true, reason: "Already processed" });
+  }
+
+  if (analysis.status === "FAILED") {
+    return NextResponse.json(
+      { error: "Analysis was already marked FAILED" },
+      { status: 409 },
+    );
+  }
 
   try {
-    const analysis = await db.analysis.findUnique({
-      where: { id: analysisId },
-    });
-    if (!analysis)
-      return NextResponse.json(
-        { error: "Analysis not found" },
-        { status: 404 },
-      );
-
-    const personaMeta = analysis.meta as {
-      personaIds: string[];
-      customPersonas: Array<{
-        name: string;
-        age: number;
-        occupation: string;
-        technicalLevel: string;
-        goals: string;
-        frustrations: string;
-      }>;
-    };
-
     await db.analysis.update({
       where: { id: analysisId },
       data: { status: "ANALYZING" },
     });
 
-    // Store pages + run vision analysis
+    // ── Phase 1: Store pages and run vision in parallel ─────────────────────
     const storedPages = await Promise.all(
       result.pages.map(async (p) => {
         const page = await db.page.create({
@@ -82,7 +93,7 @@ export async function POST(req: Request) {
             textLength: p.metrics.textLength,
             hasAuthForm: p.metrics.hasAuthForm,
             primaryActionLabel: p.metrics.primaryActionLabel,
-            navStructure: p.metrics.navStructure,
+            navStructure: p.metrics.navStructure as Prisma.InputJsonValue,
           },
         });
 
@@ -94,18 +105,26 @@ export async function POST(req: Request) {
           })),
         });
 
-        // Vision on viewport screenshot
         const vpUrl = p.screenshots.find((s) => s.type === "VIEWPORT")?.cdnUrl;
-        let visionMeta = null;
+
+        // ✅ Fix: type as VisionAnalysis | null — cast to InputJsonValue only at DB write
+        let visionMeta: VisionAnalysis | null = null;
+
         if (vpUrl) {
           try {
             visionMeta = await analyzeScreenshot(vpUrl, p.title ?? p.url);
             await db.page.update({
               where: { id: page.id },
-              data: { visionMeta: visionMeta as unknown as Prisma.InputJsonValue },
+              data: {
+                visionMeta: visionMeta as unknown as Prisma.InputJsonValue,
+              },
             });
-          } catch (e) {
-            console.warn("[vision]", e);
+          } catch (visionErr) {
+            // Vision failure is non-fatal — log and continue
+            console.warn(
+              `[crawl-complete] Vision failed for ${p.url}:`,
+              (visionErr as Error).message,
+            );
           }
         }
 
@@ -113,12 +132,25 @@ export async function POST(req: Request) {
       }),
     );
 
-    // Build persona contexts
-    const prebuiltPersonas = personaMeta.personaIds?.length
-      ? await db.persona.findMany({
-          where: { id: { in: personaMeta.personaIds } },
-        })
-      : [];
+    // ── Phase 2: Build persona contexts ─────────────────────────────────────
+    const personaMeta = analysis.meta as {
+      personaIds: string[];
+      customPersonas: Array<{
+        name: string;
+        age: number;
+        occupation: string;
+        technicalLevel: string;
+        goals: string;
+        frustrations: string;
+      }>;
+    };
+
+    const prebuiltPersonas =
+      personaMeta.personaIds?.length > 0
+        ? await db.persona.findMany({
+            where: { id: { in: personaMeta.personaIds }, isActive: true },
+          })
+        : [];
 
     const allPersonaContexts: PersonaContext[] = [
       ...prebuiltPersonas.map((p) => ({
@@ -159,40 +191,43 @@ export async function POST(req: Request) {
       contentSample: result.pages[0]?.content?.slice(0, 2000) ?? "",
     };
 
-    // Parallel persona evaluations
+    // ── Phase 3: Parallel persona evaluations (allSettled — never fails) ─────
     const evaluations = await runParallelEvaluations(
       allPersonaContexts,
       siteContext,
     );
 
-    for (let i = 0; i < allPersonaContexts.length; i++) {
-      const ctx = allPersonaContexts[i];
-      const ev = evaluations[i];
-      await db.analysisPersona.create({
-        data: {
-          analysisId,
-          personaId: ctx.id ?? null,
-          label: ctx.label,
-          name: ctx.name,
-          age: ctx.age,
-          occupation: ctx.occupation,
-          technicalLevel: ctx.technicalLevel as "LOW" | "MEDIUM" | "HIGH",
-          goals: ctx.goals,
-          frustrations: ctx.frustrations,
-          firstImpressions: ev.firstImpressions,
-          positives: JSON.stringify(ev.positives),
-          painPoints: JSON.stringify(ev.painPoints),
-          recommendations: JSON.stringify(ev.recommendations),
-          accessibilityNotes: ev.accessibilityNotes,
-          adoptionLikelihood: ev.adoptionLikelihood,
-          sentiment: ev.sentiment,
-          frictionScore: ev.frictionScore,
-          evidence: ev.evidence ?? [],
-          rawModelOutput: ev as unknown as Prisma.InputJsonValue,
-        },
-      });
-    }
+    // Write persona records in parallel
+    await Promise.all(
+      allPersonaContexts.map((ctx, i) => {
+        const ev = evaluations[i];
+        return db.analysisPersona.create({
+          data: {
+            analysisId,
+            personaId: ctx.id ?? null,
+            label: ctx.label,
+            name: ctx.name,
+            age: ctx.age,
+            occupation: ctx.occupation,
+            technicalLevel: ctx.technicalLevel as "LOW" | "MEDIUM" | "HIGH",
+            goals: ctx.goals,
+            frustrations: ctx.frustrations,
+            firstImpressions: ev.firstImpressions ?? null,
+            positives: JSON.stringify(ev.positives ?? []),
+            painPoints: JSON.stringify(ev.painPoints ?? []),
+            recommendations: JSON.stringify(ev.recommendations ?? []),
+            accessibilityNotes: ev.accessibilityNotes ?? null,
+            adoptionLikelihood: ev.adoptionLikelihood ?? null,
+            sentiment: ev.sentiment ?? null,
+            frictionScore: ev.frictionScore ?? null,
+            evidence: (ev.evidence ?? []) as Prisma.InputJsonValue,
+            rawModelOutput: ev as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }),
+    );
 
+    // ── Phase 4: Focus group ─────────────────────────────────────────────────
     const evaluationsWithLabels: PersonaEvaluationWithLabel[] =
       allPersonaContexts.map((ctx, i) => ({
         ...evaluations[i],
@@ -205,15 +240,18 @@ export async function POST(req: Request) {
       evaluationsWithLabels,
       analysis.url,
     );
+
     await db.focusGroupInsight.create({
       data: {
         analysisId,
         summary: focusGroupResult.summary,
-        conflicts: focusGroupResult.conflicts,
+        conflicts: focusGroupResult.conflicts as Prisma.InputJsonValue,
       },
     });
 
+    // ── Phase 5: Aggregate + mark complete ───────────────────────────────────
     const insights = aggregateInsights(evaluationsWithLabels);
+
     await db.analysis.update({
       where: { id: analysisId },
       data: {
@@ -227,11 +265,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[crawl-complete]:", err);
-    await db.analysis.update({
-      where: { id: analysisId },
-      data: { status: "FAILED", error: String(err) },
-    });
+    console.error("[crawl-complete] Pipeline error:", err);
+    await db.analysis
+      .update({
+        where: { id: analysisId },
+        data: { status: "FAILED", error: String(err).slice(0, 500) },
+      })
+      .catch(console.error);
+
     return NextResponse.json({ error: "Pipeline failed" }, { status: 500 });
   }
 }

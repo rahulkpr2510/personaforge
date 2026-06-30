@@ -36,17 +36,23 @@ app.post("/crawl", async (req, res) => {
 		return res.status(400).json({ error: "url and analysisId required" });
 	}
 
+	console.log(`\n[crawler] ▶ START analysisId=${analysisId} url=${url} device=${deviceType}`);
+
 	// Acknowledge immediately, process async
 	res.json({ status: "started", analysisId });
 
 	try {
+		console.log(`[crawler] 🌐 Launching browser for ${url}...`);
 		const result = await crawlAndUpload(url, analysisId, {
 			maxDepth,
 			maxPages,
 			deviceType,
 		});
+		console.log(`[crawler] ✅ Crawl done — ${result.pages.length} page(s) captured`);
+
 		// POST result back to Next.js callback
-		await fetch(`${process.env.NEXT_APP_URL}/api/internal/crawl-complete`, {
+		console.log(`[crawler] 📤 Posting results to ${process.env.NEXT_APP_URL}/api/internal/crawl-complete`);
+		const callbackRes = await fetch(`${process.env.NEXT_APP_URL}/api/internal/crawl-complete`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -54,16 +60,23 @@ app.post("/crawl", async (req, res) => {
 			},
 			body: JSON.stringify({ analysisId, result }),
 		});
+		const callbackBody = await callbackRes.text();
+		console.log(`[crawler] 📥 Callback response: ${callbackRes.status} ${callbackBody}`);
 	} catch (err) {
-		console.error("[crawler] Failed:", err);
-		await fetch(`${process.env.NEXT_APP_URL}/api/internal/crawl-failed`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-internal-secret": process.env.INTERNAL_SECRET,
-			},
-			body: JSON.stringify({ analysisId, error: String(err) }),
-		});
+		console.error(`[crawler] ❌ Error for ${analysisId}:`, err.message ?? err);
+		try {
+			const failRes = await fetch(`${process.env.NEXT_APP_URL}/api/internal/crawl-failed`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-internal-secret": process.env.INTERNAL_SECRET,
+				},
+				body: JSON.stringify({ analysisId, error: String(err) }),
+			});
+			console.log(`[crawler] 📥 Fail callback: ${failRes.status}`);
+		} catch (cbErr) {
+			console.error("[crawler] ❌ Fail callback also failed:", cbErr.message);
+		}
 	}
 });
 
@@ -191,4 +204,18 @@ async function uploadBuffer(buffer, fileName) {
 }
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`[crawler-service] Running on :${PORT}`));
+const server = app.listen(PORT, () => console.log(`[crawler-service] Running on :${PORT} — ready to receive crawl jobs`));
+
+server.on("error", (err) => {
+	if (err.code === "EADDRINUSE") {
+		console.error(`[crawler-service] ❌ Port ${PORT} is already in use. Kill the other process and restart.`);
+	} else {
+		console.error("[crawler-service] ❌ Server error:", err);
+	}
+	process.exit(1);
+});
+
+process.on("uncaughtException", (err) => {
+	console.error("[crawler-service] ❌ Uncaught exception:", err);
+	process.exit(1);
+});

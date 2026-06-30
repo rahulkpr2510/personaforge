@@ -112,7 +112,7 @@ async function triggerCrawler(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-internal-secret": process.env.INTERNAL_SECRET ?? "",
+      "x-crawler-secret": process.env.CRAWLER_SECRET ?? "",
     },
     body: JSON.stringify({
       analysisId,

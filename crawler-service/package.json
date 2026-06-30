@@ -1,0 +1,19 @@
+{
+	"name": "personaforge-crawler",
+	"version": "1.0.0",
+	"main": "server.js",
+	"dependencies": {
+		"dotenv": "^17.4.2",
+		"express": "^5.2.1",
+		"imagekit": "^6.0.0",
+		"playwright": "^1.61.1"
+	},
+	"scripts": {
+		"start": "node server.js",
+		"dev": "node --watch server.js"
+	},
+	"type": "module",
+	"devDependencies": {
+		"@types/bun": "^1.3.14"
+	}
+}

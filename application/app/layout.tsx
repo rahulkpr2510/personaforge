@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { shadcn } from "@clerk/ui/themes";
-import { Inter, Playfair_Display } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { cn } from "@/lib/utils";
 import AgentationWrapper from "@/components/shared/AgentationWrapper";
+import Script from "next/script";
 
 const inter = Inter({
 	subsets: ["latin"],
@@ -13,11 +14,11 @@ const inter = Inter({
 	display: "swap",
 });
 
-const playfair = Playfair_Display({
+const playfair = Space_Grotesk({
 	subsets: ["latin"],
 	variable: "--font-display",
 	display: "swap",
-	weight: ["400", "500", "600", "700", "800", "900"],
+	weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -37,9 +38,13 @@ export default function RootLayout({
 				lang="en"
 				suppressHydrationWarning
 				className={cn(inter.variable, playfair.variable)}
+				data-scroll-behavior="smooth"
 			>
 				<head>
-					<script
+					{/* Blocks theme flash before React hydrates — must live in <head> */}
+					<Script
+						id="theme-initializer"
+						strategy="beforeInteractive"
 						dangerouslySetInnerHTML={{
 							__html: `(function(){try{var t=localStorage.getItem('pf-theme');if(t){document.documentElement.classList.toggle('dark',t==='dark')}else{var d=window.matchMedia('(prefers-color-scheme:dark)').matches;document.documentElement.classList.toggle('dark',d)}}catch(e){}})()`,
 						}}
@@ -55,3 +60,4 @@ export default function RootLayout({
 		</ClerkProvider>
 	);
 }
+

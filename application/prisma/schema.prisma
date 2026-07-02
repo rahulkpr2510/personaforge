@@ -1,17 +1,159 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
-// ---------- Enums ----------
+
+model User {
+  id        String     @id @default(cuid())
+  clerkId   String     @unique
+  email     String     @unique
+  name      String?
+  role      UserRole   @default(USER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  analyses  Analysis[]
+  personas  Persona[]
+
+  @@index([clerkId])
+  @@index([role])
+}
+
+model Persona {
+  id               String            @id @default(cuid())
+  ownerId          String?
+  label            String            @unique
+  name             String
+  age              Int
+  occupation       String
+  technicalLevel   TechnicalLevel
+  goals            String
+  frustrations     String
+  isPrebuilt       Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  tags             String[]          @default([])
+  metadata         Json?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  analysisPersonas AnalysisPersona[]
+  owner            User?             @relation(fields: [ownerId], references: [id])
+
+  @@unique([ownerId, label])
+  @@index([ownerId])
+  @@index([isPrebuilt, isActive])
+}
+
+model Analysis {
+  id                   String             @id @default(cuid())
+  userId               String
+  url                  String
+  normalizedHost       String
+  status               AnalysisStatus     @default(PENDING)
+  deviceType           DeviceType         @default(DESKTOP)
+  maxDepth             Int                @default(2)
+  maxPages             Int                @default(8)
+  overallSentiment     SentimentLabel?
+  overallFrictionScore Int?
+  summary              String?
+  meta                 Json?
+  error                String?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  analysisInput        Json?
+  user                 User               @relation(fields: [userId], references: [id])
+  personas             AnalysisPersona[]
+  focusGroup           FocusGroupInsight?
+  pages                Page[]
+
+  @@index([userId, createdAt])
+  @@index([normalizedHost])
+  @@index([status])
+}
+
+model Page {
+  id                 String       @id @default(cuid())
+  analysisId         String
+  url                String
+  path               String?
+  title              String?
+  depth              Int
+  content            String?
+  formsCount         Int          @default(0)
+  buttonsCount       Int          @default(0)
+  linksCount         Int          @default(0)
+  textLength         Int          @default(0)
+  hasAuthForm        Boolean      @default(false)
+  primaryActionLabel String?
+  performance        Json?
+  accessibility      Json?
+  navStructure       Json?
+  visionMeta         Json?
+  frictionScore      Int?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  analysis           Analysis     @relation(fields: [analysisId], references: [id])
+  screenshots        Screenshot[]
+
+  @@index([analysisId, depth])
+  @@index([url])
+}
+
+model Screenshot {
+  id        String         @id @default(cuid())
+  pageId    String
+  cdnUrl    String
+  type      ScreenshotType @default(FULL_PAGE)
+  width     Int?
+  height    Int?
+  createdAt DateTime       @default(now())
+  page      Page           @relation(fields: [pageId], references: [id])
+
+  @@index([pageId])
+}
+
+model AnalysisPersona {
+  id                 String          @id @default(cuid())
+  analysisId         String
+  personaId          String?
+  label              String
+  name               String
+  age                Int
+  occupation         String
+  technicalLevel     TechnicalLevel
+  goals              String
+  frustrations       String
+  firstImpressions   String?
+  positives          String?
+  painPoints         String?
+  recommendations    String?
+  accessibilityNotes String?
+  adoptionLikelihood Int?
+  sentiment          SentimentLabel?
+  frictionScore      Int?
+  evidence           Json?
+  rawModelOutput     Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  analysis           Analysis        @relation(fields: [analysisId], references: [id])
+  persona            Persona?        @relation(fields: [personaId], references: [id])
+
+  @@index([analysisId])
+  @@index([personaId])
+  @@index([sentiment])
+}
+
+model FocusGroupInsight {
+  id         String   @id @default(cuid())
+  analysisId String   @unique
+  summary    String
+  conflicts  Json
+  createdAt  DateTime @default(now())
+  analysis   Analysis @relation(fields: [analysisId], references: [id])
+}
 
 enum UserRole {
   USER
@@ -19,9 +161,9 @@ enum UserRole {
 }
 
 enum AnalysisStatus {
-  PENDING      // created, not started
-  CRAWLING     // Playwright crawling
-  ANALYZING    // vision + personas + focus group
+  PENDING
+  CRAWLING
+  ANALYZING
   COMPLETED
   FAILED
 }
@@ -46,213 +188,4 @@ enum SentimentLabel {
 enum ScreenshotType {
   FULL_PAGE
   VIEWPORT
-}
-
-// ---------- Models ----------
-
-model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique           // Clerk user ID
-  email     String   @unique
-  name      String?
-  role      UserRole @default(USER)
-
-  personas  Persona[]
-  analyses  Analysis[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([clerkId])
-  @@index([role])
-}
-
-// Persona definitions: prebuilt library + user-defined/custom personas.
-// Prebuilt personas have isPrebuilt=true and ownerId = null.
-// Custom personas can be owned by a user and reused across analyses.
-model Persona {
-  id             String         @id @default(cuid())
-  ownerId        String?
-  owner          User?          @relation(fields: [ownerId], references: [id])
-
-  // Display / identity fields
-  label  String    // e.g. "Senior Citizen", "Software Developer"
-  name           String         // e.g. "Ramesh, retired banker"
-  age            Int
-  occupation     String
-  technicalLevel TechnicalLevel
-
-  // Core UX behavior context
-  goals          String         // long text describing goals
-  frustrations   String         // long text describing frustrations
-
-  // Management flags
-  isPrebuilt     Boolean        @default(false)
-  isActive       Boolean        @default(true)
-
-  // Optional categorization / extension
-  tags           String[]       @default([]) // PostgreSQL text[] for quick filtering
-  metadata       Json?          // any extra persona metadata (locale, device prefs, etc.)
-
-  analysisPersonas AnalysisPersona[]
-
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  @@unique([ownerId, label])
-  @@unique([label])
-  @@index([ownerId])
-  @@index([isPrebuilt, isActive])
-}
-
-// A single analysis run started by a user for a given URL.
-// Ties together: pages crawled, persona evaluations, and focus group insight.
-model Analysis {
-  id          String         @id @default(cuid())
-  userId      String
-  user        User           @relation(fields: [userId], references: [id])
-
-  url         String
-  normalizedHost String
-  status      AnalysisStatus @default(PENDING)
-
-  deviceType  DeviceType     @default(DESKTOP)
-  maxDepth    Int            @default(2)
-  maxPages    Int            @default(8)
-
-  overallSentiment     SentimentLabel?
-  overallFrictionScore Int?
-  summary              String?
-  analysisInput        Json?   // ← ADD THIS: stores { personaIds, customPersonas, deviceType } — write once
-  meta                 Json?   // aggregated output only — written at COMPLETED
-
-  error       String?
-  startedAt   DateTime?
-  completedAt DateTime?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  pages       Page[]
-  personas    AnalysisPersona[]
-  focusGroup  FocusGroupInsight?
-
-  @@index([userId, createdAt])
-  @@index([normalizedHost])
-  @@index([status])
-}
-
-// Each crawled page (URL) within an analysis.
-// Contains structural metrics and machine understanding (vision/accessibility).
-model Page {
-  id             String    @id @default(cuid())
-  analysisId     String
-  analysis       Analysis  @relation(fields: [analysisId], references: [id])
-
-  url            String
-  path           String?   // path relative to origin, if easily derived
-  title          String?
-  depth          Int       // navigation depth from root (0 = root)
-
-  // Raw content (can be truncated or processed before insert to avoid bloat)
-  content        String?
-
-  // Structural metrics for evidence-based reasoning
-  formsCount     Int       @default(0)
-  buttonsCount   Int       @default(0)
-  linksCount     Int       @default(0)
-  textLength     Int       @default(0) // number of characters or tokens
-  hasAuthForm    Boolean   @default(false)
-  primaryActionLabel String?
-
-  // Performance / accessibility / layout metadata (JSONB via Prisma Json)
-  performance    Json?     // e.g. { lcpMs, fcpMs, tbtMs }
-  accessibility  Json?     // e.g. contrast issues, missing labels
-  navStructure   Json?     // simplified navigation tree
-  visionMeta     Json?     // Gemini Vision's structured UI/layout description
-
-  // Per-page friction signal for heatmap-like views
-  frictionScore  Int?      // 0–100
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  screenshots    Screenshot[]
-
-  @@index([analysisId, depth])
-  @@index([url])
-}
-
-// Screenshot captured via Playwright and stored on ImageKit.
-// We only store CDN URL + some basic metadata.
-model Screenshot {
-  id         String         @id @default(cuid())
-  pageId     String
-  page       Page           @relation(fields: [pageId], references: [id])
-
-  cdnUrl     String         // ImageKit URL
-  type       ScreenshotType @default(FULL_PAGE)
-  width      Int?
-  height     Int?
-
-  createdAt  DateTime       @default(now())
-
-  @@index([pageId])
-}
-
-// Join model for "this persona evaluated this analysis".
-// Stores a snapshot of persona attributes + AI evaluation results.
-model AnalysisPersona {
-  id              String      @id @default(cuid())
-  analysisId      String
-  analysis        Analysis    @relation(fields: [analysisId], references: [id])
-  personaId       String?
-  persona         Persona?    @relation(fields: [personaId], references: [id])
-
-  // Snapshot of persona attributes at analysis time (so changes later don't affect old runs)
-  label           String      // persona label at the time of analysis
-  name            String
-  age             Int
-  occupation      String
-  technicalLevel  TechnicalLevel
-  goals           String
-  frustrations    String
-
-  // AI evaluation outputs for this persona
-  firstImpressions   String?   // high-level first reaction
-  positives          String?   // serialized list/markdown of positives
-  painPoints         String?   // serialized list/markdown of pain points
-  recommendations    String?   // serialized list/markdown of suggestions
-  accessibilityNotes String?   // persona-specific accessibility feedback
-
-  adoptionLikelihood Int?      // 0–100
-  sentiment          SentimentLabel?
-  frictionScore      Int?      // 0–100, persona-specific friction metric
-
-  // Evidence-based reasoning support:
-  // e.g. list of { issue, confidence, reason, support: { formsCount, buttonsCount, navigationDepth } }
-  evidence           Json?
-
-  // Optional full raw model JSON before parsing, for debugging/re-analysis
-  rawModelOutput     Json?
-
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  @@index([analysisId])
-  @@index([personaId])
-  @@index([sentiment])
-}
-
-// Synthetic focus group discussion result for an analysis.
-// Captures disagreements, consensus, and segment explanations.
-model FocusGroupInsight {
-  id         String   @id @default(cuid())
-  analysisId String   @unique
-  analysis   Analysis @relation(fields: [analysisId], references: [id])
-
-  summary    String   // narrative summary from AI moderator
-  conflicts  Json     // e.g. { items: [{ topic, personasAgree, personasDisagree, reason, segmentExplanation }] }
-
-  createdAt  DateTime @default(now())
 }

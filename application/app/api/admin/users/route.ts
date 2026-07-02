@@ -4,15 +4,16 @@ import { db } from "@/lib/db";
 
 export async function GET() {
   try {
-    const user = await requireAuth();
-    if (user.role !== "ADMIN")
+    const viewer = await requireAuth();
+    if (viewer.role !== "ADMIN")
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const users = await db.user.findMany({
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { analyses: true, personas: true } } },
     });
-    return NextResponse.json({ users });
+    // Return currentUserId so the UI can disable self-role-change
+    return NextResponse.json({ users, currentUserId: viewer.id });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -28,6 +29,15 @@ export async function PATCH(req: Request) {
       userId: string;
       role: "USER" | "ADMIN";
     };
+
+    // Prevent admins from changing their own role
+    if (userId === admin.id) {
+      return NextResponse.json(
+        { error: "You cannot change your own role." },
+        { status: 400 },
+      );
+    }
+
     const updated = await db.user.update({
       where: { id: userId },
       data: { role },

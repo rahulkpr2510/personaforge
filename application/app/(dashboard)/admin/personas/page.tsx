@@ -21,6 +21,7 @@ interface AdminPersona {
 	tags: string[];
 	isActive: boolean;
 	isPrebuilt: boolean;
+	description?: string | null;
 	_count: { analysisPersonas: number };
 }
 
@@ -227,93 +228,62 @@ function AdminPersonaCard({
 	onDelete,
 }: AdminPersonaCardProps) {
 	return (
-		<div
-			className={cn(
-				"group relative flex flex-col rounded-xl border bg-card transition-all duration-200 hover:shadow-md",
-				persona.isActive ? "border-border" : "border-border/50 border-dashed",
-			)}
-		>
-			{/* Usage count badge */}
-			<div className="absolute right-3 top-3 z-10">
-				<span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+		<div className="relative h-full">
+			{/* Usage count badge overlaid top-right */}
+			<div className="absolute right-3 top-3 z-20">
+				<span className="rounded-full bg-muted/95 backdrop-blur-xs px-2 py-0.5 text-xs text-muted-foreground tabular-nums border border-border/40">
 					{persona._count.analysisPersonas} uses
 				</span>
 			</div>
 
-			{/* Reuse PersonaCard's visual body */}
-			<div className="p-5">
-				<div className="flex items-start gap-3 pr-14">
-					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--pf-accent-soft) text-(--pf-accent)">
-						<span className="font-heading font-bold text-sm">
-							{persona.label.charAt(0)}
-						</span>
-					</div>
-					<div className="min-w-0">
-						<p className="text-sm font-semibold text-foreground leading-tight">
-							{persona.label}
-						</p>
-						<p className="text-xs text-muted-foreground mt-0.5">
-							{persona.name} · {persona.age}y · {persona.occupation}
-						</p>
-					</div>
-				</div>
-
-				<p className="mt-3 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-					<span className="font-medium text-foreground/70">Goals: </span>
-					{persona.goals}
-				</p>
-
-				{persona.tags.length > 0 && (
-					<div className="mt-3 flex flex-wrap gap-1.5">
-						{persona.tags.slice(0, 3).map((tag) => (
-							<span
-								key={tag}
-								className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-							>
-								#{tag}
-							</span>
-						))}
-					</div>
+			<PersonaCard
+				persona={persona}
+				className={cn(
+					"transition-all duration-200",
+					persona.isActive ? "" : "border-dashed opacity-75",
 				)}
-			</div>
+				footerActions={
+					<div className="flex items-center gap-1.5 w-full">
+						<button
+							onClick={onToggle}
+							disabled={toggling}
+							title={
+								persona.isActive
+									? "Deactivate for all users"
+									: "Activate for all users"
+							}
+							className={cn(
+								"flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
+								persona.isActive
+									? "text-(--pf-green) hover:bg-(--pf-green-soft)"
+									: "text-muted-foreground hover:bg-accent",
+							)}
+						>
+							{persona.isActive ? (
+								<ToggleRight className="h-4 w-4" />
+							) : (
+								<ToggleLeft className="h-4 w-4" />
+							)}
+							{toggling ? "…" : persona.isActive ? "Active" : "Inactive"}
+						</button>
 
-			{/* Admin action bar */}
-			<div className="flex items-center gap-1.5 border-t border-border px-4 py-3 bg-muted/20">
-				{/* Toggle active */}
-				<button
-					onClick={onToggle}
-					disabled={toggling}
-					title={persona.isActive ? "Deactivate" : "Activate"}
-					className={cn(
-						"flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
-						persona.isActive
-							? "text-(--pf-green) hover:bg-(--pf-green-soft)"
-							: "text-muted-foreground hover:bg-accent",
-					)}
-				>
-					{persona.isActive ? (
-						<ToggleRight className="h-4 w-4" />
-					) : (
-						<ToggleLeft className="h-4 w-4" />
-					)}
-					{toggling ? "…" : persona.isActive ? "Active" : "Inactive"}
-				</button>
-
-				<div className="ml-auto flex items-center gap-1">
-					<button
-						onClick={onEdit}
-						className="rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-					>
-						Edit
-					</button>
-					<button
-						onClick={onDelete}
-						className="rounded-lg px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
-					>
-						Delete
-					</button>
-				</div>
-			</div>
+						<div className="ml-auto flex items-center gap-1">
+							<button
+								onClick={onEdit}
+								className="rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+							>
+								Edit
+							</button>
+							<button
+								onClick={onDelete}
+								className="rounded-lg px-2.5 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+							>
+								Delete
+							</button>
+						</div>
+					</div>
+				}
+			/>
 		</div>
 	);
 }

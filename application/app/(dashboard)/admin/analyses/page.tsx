@@ -174,7 +174,7 @@ export default function AdminAnalysesPage() {
 											</td>
 											<td className="px-4 py-3">
 												<a
-													href={`/dashboard/analyses/${a.id}`}
+													href={`/admin/analyses/${a.id}`}
 													className="text-xs text-(--pf-accent) hover:opacity-70 transition-opacity whitespace-nowrap"
 												>
 													View →

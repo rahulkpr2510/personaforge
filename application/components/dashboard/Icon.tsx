@@ -11,6 +11,7 @@ import {
 	CheckCircle,
 	CircleCheckBig,
 	AlertTriangle,
+	Zap,
 	type LucideProps
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ export const iconMap = {
 	CheckCircle,
 	CircleCheckBig,
 	AlertTriangle,
+	Zap,
 };
 
 export type IconName = keyof typeof iconMap;

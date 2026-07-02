@@ -3,8 +3,8 @@ import { requireAuth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { MobileNav } from "@/components/dashboard/MobileNav";
-import { SidebarItem } from "@/components/dashboard/SidebarItem";
-import { ChevronLeft } from "lucide-react";
+import { SidebarItem, SidebarSection } from "@/components/dashboard/SidebarItem";
+
 import { type IconName } from "@/components/dashboard/Icon";
 import Link from "next/link";
 
@@ -54,20 +54,9 @@ export default async function AdminLayout({
 						</div>
 					</div>
 				}
-				bottomChildren={
-					<Link
-						href="/dashboard"
-						className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-					>
-						<ChevronLeft className="h-3.5 w-3.5" /> Back to Dashboard
-					</Link>
-				}
+
 			>
-				<div className="mb-2 px-3">
-					<p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-						Admin Panel
-					</p>
-				</div>
+				<SidebarSection label="Admin Panel" />
 				{adminNavItems.map((item) => (
 					<SidebarItem
 						key={item.href}
@@ -81,7 +70,7 @@ export default async function AdminLayout({
 
 			<MobileNav items={adminNavItems} title="Admin Panel" />
 
-			<main className="lg:pl-60">
+			<main className="lg:pl-64">
 				<div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
 					{children}
 				</div>

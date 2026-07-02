@@ -11,6 +11,8 @@ import {
 	ChevronLeft,
 	Zap,
 	Users,
+	CheckCircle2,
+	Info,
 } from "lucide-react";
 import { PersonaCard } from "./PersonaCard";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,7 @@ interface Persona {
 	goals: string;
 	frustrations: string;
 	tags: string[];
+	description?: string | null;
 }
 
 interface AnalysisWizardProps {
@@ -45,6 +48,8 @@ export function AnalysisWizard({
 	const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	const allPersonas = [...prebuiltPersonas, ...customPersonas];
 
 	const togglePersona = (id: string) => {
 		setSelectedPersonaIds((prev) =>
@@ -91,8 +96,12 @@ export function AnalysisWizard({
 	const inputCls =
 		"w-full rounded-lg border border-input bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-[var(--pf-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--pf-accent)]/20 transition-all";
 
+	const selectedPersonas = allPersonas.filter((p) =>
+		selectedPersonaIds.includes(p.id),
+	);
+
 	return (
-		<div className="mx-auto max-w-2xl">
+		<div>
 			{/* Step indicator */}
 			<div className="mb-8 flex items-center justify-between">
 				{steps.map((s, i) => (
@@ -134,6 +143,7 @@ export function AnalysisWizard({
 			{/* Step content */}
 			<div className="rounded-2xl border border-border bg-card p-6 sm:p-8">
 				<AnimatePresence mode="wait">
+					{/* ── Step 1: URL + Device ── */}
 					{step === 1 && (
 						<motion.div
 							key="step1"
@@ -151,7 +161,8 @@ export function AnalysisWizard({
 										Enter target URL
 									</h2>
 									<p className="text-sm text-muted-foreground">
-										We'll crawl and analyse your product or page
+										We'll crawl up to 10 pages and capture how each persona
+										reacts to your product.
 									</p>
 								</div>
 							</div>
@@ -159,7 +170,7 @@ export function AnalysisWizard({
 							<div className="space-y-5">
 								<div>
 									<label className="block text-xs font-medium text-muted-foreground mb-2">
-										URL *
+										Website URL <span className="text-destructive">*</span>
 									</label>
 									<div className="relative">
 										<Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -171,12 +182,21 @@ export function AnalysisWizard({
 											onChange={(e) => setUrl(e.target.value)}
 										/>
 									</div>
+									<p className="mt-1.5 text-xs text-muted-foreground">
+										Include the full URL with{" "}
+										<code className="bg-muted px-1 rounded">https://</code>
+									</p>
 								</div>
 
 								<div>
 									<label className="block text-xs font-medium text-muted-foreground mb-2">
 										Device type
 									</label>
+									<p className="mb-3 text-xs text-muted-foreground">
+										Personas will evaluate the site as if they're browsing on
+										this device — this affects layout, navigation, and
+										interaction patterns.
+									</p>
 									<div className="grid grid-cols-2 gap-3">
 										{(["DESKTOP", "MOBILE"] as const).map((d) => (
 											<button
@@ -218,10 +238,12 @@ export function AnalysisWizard({
 																: "text-foreground",
 														)}
 													>
-														{d.charAt(0) + d.slice(1).toLowerCase()}
+														{d === "DESKTOP" ? "Desktop" : "Mobile"}
 													</p>
 													<p className="text-xs text-muted-foreground">
-														{d === "DESKTOP" ? "Full layout" : "Touch-first"}
+														{d === "DESKTOP"
+															? "Full layout, keyboard & mouse"
+															: "Touch-first, smaller viewport"}
 													</p>
 												</div>
 											</button>
@@ -232,6 +254,7 @@ export function AnalysisWizard({
 						</motion.div>
 					)}
 
+					{/* ── Step 2: Persona Selection ── */}
 					{step === 2 && (
 						<motion.div
 							key="step2"
@@ -240,7 +263,7 @@ export function AnalysisWizard({
 							exit={{ opacity: 0, x: -20 }}
 							transition={{ duration: 0.2 }}
 						>
-							<div className="mb-6 flex items-center gap-3">
+							<div className="mb-5 flex items-center gap-3">
 								<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-(--pf-accent-soft)">
 									<Users className="h-5 w-5 text-(--pf-accent)" />
 								</div>
@@ -249,10 +272,44 @@ export function AnalysisWizard({
 										Choose personas
 									</h2>
 									<p className="text-sm text-muted-foreground">
-										Select up to 5 personas · {selectedPersonaIds.length}/5
-										selected
+										Select up to 5 people who will evaluate your product
 									</p>
 								</div>
+							</div>
+
+							{/* Progress bar */}
+							<div className="mb-5">
+								<div className="flex items-center justify-between mb-1.5">
+									<span className="text-xs text-muted-foreground">
+										{selectedPersonaIds.length === 0
+											? "Select at least 1 persona"
+											: `${selectedPersonaIds.length} of 5 selected`}
+									</span>
+									{selectedPersonaIds.length === 5 && (
+										<span className="text-xs font-medium text-(--pf-amber)">
+											Maximum reached
+										</span>
+									)}
+								</div>
+								<div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+									<motion.div
+										className="h-full rounded-full bg-(--pf-accent)"
+										animate={{
+											width: `${(selectedPersonaIds.length / 5) * 100}%`,
+										}}
+										transition={{ type: "spring", stiffness: 200, damping: 24 }}
+									/>
+								</div>
+							</div>
+
+							{/* Info tip */}
+							<div className="mb-5 flex items-start gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+								<Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+								<p className="text-xs text-muted-foreground leading-relaxed">
+									Each persona independently browses your product and writes a
+									report with positives, pain points, and actionable
+									recommendations. More diverse personas = richer insights.
+								</p>
 							</div>
 
 							{prebuiltPersonas.length > 0 && (
@@ -260,7 +317,7 @@ export function AnalysisWizard({
 									<p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
 										Persona Library
 									</p>
-									<div className="grid gap-3 sm:grid-cols-2">
+									<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 										{prebuiltPersonas.map((p) => (
 											<PersonaCard
 												key={p.id}
@@ -279,7 +336,7 @@ export function AnalysisWizard({
 									<p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
 										Your Custom Personas
 									</p>
-									<div className="grid gap-3 sm:grid-cols-2">
+									<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 										{customPersonas.map((p) => (
 											<PersonaCard
 												key={p.id}
@@ -295,6 +352,7 @@ export function AnalysisWizard({
 						</motion.div>
 					)}
 
+					{/* ── Step 3: Review ── */}
 					{step === 3 && (
 						<motion.div
 							key="step3"
@@ -312,34 +370,73 @@ export function AnalysisWizard({
 										Ready to analyse
 									</h2>
 									<p className="text-sm text-muted-foreground">
-										Review your settings before starting
+										Review your settings — this typically takes 2–5 minutes
 									</p>
 								</div>
 							</div>
 
-							<div className="space-y-4 rounded-xl bg-muted/40 p-5 text-sm">
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">URL</span>
-									<span className="font-medium truncate max-w-xs text-right">
+							<div className="space-y-3">
+								{/* URL */}
+								<div className="flex items-start justify-between rounded-xl bg-muted/40 px-4 py-3">
+									<span className="text-xs text-muted-foreground mt-0.5">
+										Target URL
+									</span>
+									<span className="font-medium text-sm truncate max-w-[60%] text-right text-foreground">
 										{url}
 									</span>
 								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Device</span>
-									<span className="font-medium">
-										{deviceType.charAt(0) + deviceType.slice(1).toLowerCase()}
+
+								{/* Device */}
+								<div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3">
+									<span className="text-xs text-muted-foreground">Device</span>
+									<span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+										{deviceType === "DESKTOP" ? (
+											<Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+										) : (
+											<Smartphone className="h-3.5 w-3.5 text-muted-foreground" />
+										)}
+										{deviceType === "DESKTOP" ? "Desktop" : "Mobile"}
 									</span>
 								</div>
-								<div className="flex justify-between">
-									<span className="text-muted-foreground">Personas</span>
-									<span className="font-medium">
-										{selectedPersonaIds.length} selected
-									</span>
+
+								{/* Personas */}
+								<div className="rounded-xl bg-muted/40 px-4 py-3">
+									<div className="flex items-center justify-between mb-3">
+										<span className="text-xs text-muted-foreground">
+											Personas ({selectedPersonas.length})
+										</span>
+									</div>
+									<div className="space-y-2">
+										{selectedPersonas.map((p) => (
+											<div key={p.id} className="flex items-center gap-2.5">
+												<CheckCircle2 className="h-3.5 w-3.5 text-(--pf-green) shrink-0" />
+												<span className="text-sm font-medium text-foreground">
+													{p.label}
+												</span>
+												<span className="text-xs text-muted-foreground ml-auto">
+													{p.name}, {p.age}y
+												</span>
+											</div>
+										))}
+									</div>
+								</div>
+
+								{/* What happens next */}
+								<div className="rounded-xl border border-(--pf-accent)/20 bg-(--pf-accent-soft) px-4 py-3">
+									<p className="text-xs font-semibold text-(--pf-accent) mb-1">
+										What happens next
+									</p>
+									<p className="text-xs text-foreground/80 leading-relaxed">
+										PersonaForge will crawl the URL, take screenshots, then
+										simulate how each persona experiences your product. You'll
+										get a detailed report with friction scores, sentiment
+										analysis, and actionable recommendations.
+									</p>
 								</div>
 							</div>
 
 							{error && (
-								<p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+								<p className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-sm text-destructive">
 									{error}
 								</p>
 							)}
@@ -366,11 +463,11 @@ export function AnalysisWizard({
 							(step === 2 && selectedPersonaIds.length === 0) ||
 							loading
 						}
-						className="ml-auto flex items-center gap-2 rounded-xl bg-(--pf-accent) px-6 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40 transition-all"
+						className="ml-auto flex items-center gap-2 rounded-xl bg-(--pf-accent) px-6 py-2.5 text-sm font-semibold text-white shadow-[0_2px_12px_var(--pf-accent,#6366f1)30] hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
 					>
 						{step === 3
 							? loading
-								? "Starting…"
+								? "Starting analysis…"
 								: "Start Analysis"
 							: "Continue"}
 						{step < 3 && <ChevronRight className="h-4 w-4" />}

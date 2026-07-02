@@ -1,61 +1,89 @@
 // app/(dashboard)/dashboard/page.tsx
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
 import Link from "next/link";
-import { PageHeader } from "@/components/dashboard/PageHeader";
+import { currentUser } from "@clerk/nextjs/server";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { AnalysisCard } from "@/components/dashboard/AnalysisCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
-import { PlusCircle } from "lucide-react";
+import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
+import {
+	PlusCircle,
+	ArrowRight,
+	Clock,
+	Users,
+	Sparkles,
+	ChevronRight,
+	FlaskConical,
+	Globe,
+} from "lucide-react";
 
 export default async function DashboardOverviewPage() {
-	const user = await requireAuth();
+	const [user, clerkUser] = await Promise.all([requireAuth(), currentUser()]);
 
-	const [analysesRaw, personaCount] = await Promise.all([
-		db.analysis.findMany({
-			where: { userId: user.id },
-			orderBy: { createdAt: "desc" },
-			take: 5,
-			include: {
-				_count: { select: { pages: true, personas: true } },
-				focusGroup: { select: { id: true } },
-			},
-		}),
-		db.persona.count({ where: { ownerId: user.id, isPrebuilt: false } }),
-	]);
+	const firstName = clerkUser?.firstName ?? "there";
 
-	const completed = analysesRaw.filter((a) => a.status === "COMPLETED").length;
-	const total = analysesRaw.length;
+	const [analysesRaw, personaCount, allCount, completedTotal] =
+		await Promise.all([
+			db.analysis.findMany({
+				where: { userId: user.id },
+				orderBy: { createdAt: "desc" },
+				take: 6,
+				include: {
+					_count: { select: { pages: true, personas: true } },
+					focusGroup: { select: { id: true } },
+				},
+			}),
+			db.persona.count({ where: { ownerId: user.id, isPrebuilt: false } }),
+			db.analysis.count({ where: { userId: user.id } }),
+			db.analysis.count({ where: { userId: user.id, status: "COMPLETED" } }),
+		]);
+
+	const running = analysesRaw.filter(
+		(a) => a.status === "CRAWLING" || a.status === "ANALYZING",
+	).length;
+
+	const successRate =
+		allCount > 0 ? Math.round((completedTotal / allCount) * 100) : null;
+
+	// Time since last analysis
+	const lastAnalysis = analysesRaw[0];
+	const hoursSinceLast = lastAnalysis
+		? Math.round(
+				(Date.now() - new Date(lastAnalysis.createdAt).getTime()) / 36e5,
+			)
+		: null;
+	const lastActiveLabel =
+		hoursSinceLast === null
+			? null
+			: hoursSinceLast < 1
+				? "less than an hour ago"
+				: hoursSinceLast < 24
+					? `${hoursSinceLast}h ago`
+					: `${Math.round(hoursSinceLast / 24)}d ago`;
+
+	const isFirstTime = allCount === 0;
 
 	return (
 		<div className="space-y-8">
-			<PageHeader
-				title="Overview"
-				description="Your PersonaForge workspace"
-				actions={
-					<Link
-						href="/dashboard/new-analysis"
-						className="flex items-center gap-2 rounded-xl bg-(--pf-accent) px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-					>
-						<PlusCircle className="h-4 w-4" />
-						New Analysis
-					</Link>
-				}
+			{/* Greeting banner */}
+			<DashboardGreeting
+				firstName={firstName}
+				running={running}
+				href="/dashboard/new-analysis"
 			/>
 
 			{/* KPI stats */}
-			<div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+			<div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
 				<StatCard
 					title="Total Analyses"
-					value={total}
+					value={allCount}
 					icon="FlaskConical"
 					accent="default"
 				/>
 				<StatCard
 					title="Completed"
-					value={completed}
+					value={completedTotal}
 					icon="CheckCircle"
 					accent="green"
 				/>
@@ -64,42 +92,158 @@ export default async function DashboardOverviewPage() {
 					value={personaCount}
 					icon="Users"
 					accent="amber"
-					className="col-span-2 sm:col-span-1"
+				/>
+				<StatCard
+					title="Running Now"
+					value={running}
+					icon="Zap"
+					accent="blue"
 				/>
 			</div>
 
-			{/* Recent analyses */}
-			<div>
-				<div className="mb-4 flex items-center justify-between">
-					<h2 className="font-heading text-sm font-semibold text-foreground">
-						Recent Analyses
-					</h2>
-					{total > 0 && (
-						<Link
-							href="/dashboard/analyses"
-							className="text-xs text-(--pf-accent) hover:opacity-80 transition-opacity"
-						>
-							View all →
-						</Link>
-					)}
-				</div>
-				{analysesRaw.length === 0 ? (
-					<EmptyState
-						icon="FlaskConical"
-						title="No analyses yet"
-						description="Run your first AI-powered UX analysis to see results here."
-						action={
-							<Link
-								href="/dashboard/new-analysis"
-								className="inline-flex items-center gap-2 rounded-xl bg-(--pf-accent) px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+			{/* First-time onboarding or Quick Actions */}
+			{isFirstTime ? (
+				/* Getting started — shown only when zero analyses */
+				<div className="rounded-2xl border border-(--pf-accent)/20 bg-(--pf-accent-soft) p-6">
+					<div className="flex items-center gap-2 mb-4">
+						<Sparkles className="h-5 w-5 text-(--pf-accent)" />
+						<h2 className="font-heading text-base font-semibold text-(--pf-accent)">
+							Get started with PersonaForge
+						</h2>
+					</div>
+					<div className="grid gap-3 sm:grid-cols-3">
+						{[
+							{
+								step: "1",
+								icon: Globe,
+								title: "Enter a URL",
+								desc: "Any live product, landing page, or web app",
+							},
+							{
+								step: "2",
+								icon: Users,
+								title: "Choose personas",
+								desc: "Pick from our library or create custom user types",
+							},
+							{
+								step: "3",
+								icon: FlaskConical,
+								title: "Get insights",
+								desc: "AI simulates each persona and generates a UX report",
+							},
+						].map((s) => (
+							<div
+								key={s.step}
+								className="flex items-start gap-3 rounded-xl border border-(--pf-accent)/20 bg-background/60 p-4"
 							>
-								<PlusCircle className="h-4 w-4" />
-								Start your first analysis
+								<div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-(--pf-accent) text-white font-heading font-bold text-xs">
+									{s.step}
+								</div>
+								<div>
+									<p className="text-sm font-semibold text-foreground">
+										{s.title}
+									</p>
+									<p className="text-xs text-muted-foreground mt-0.5">
+										{s.desc}
+									</p>
+								</div>
+							</div>
+						))}
+					</div>
+					<Link
+						href="/dashboard/new-analysis"
+						className="mt-5 inline-flex items-center gap-2 rounded-xl bg-(--pf-accent) px-5 py-2.5 text-sm font-semibold text-white shadow-[0_2px_16px_var(--pf-accent,#6366f1)30] hover:opacity-90 hover:-translate-y-0.5 transition-all"
+					>
+						<PlusCircle className="h-4 w-4" /> Start your first analysis
+					</Link>
+				</div>
+			) : (
+				/* Quick actions — shown after first analysis */
+				<div className="grid gap-3 sm:grid-cols-3">
+					{[
+						{
+							href: "/dashboard/new-analysis",
+							icon: PlusCircle,
+							label: "New Analysis",
+							sub: "Analyse any URL with AI personas",
+							primary: true,
+						},
+						{
+							href: "/dashboard/analyses",
+							icon: Clock,
+							label: "All Analyses",
+							sub: `${allCount} total · ${successRate !== null ? `${successRate}% success` : ""}`,
+							primary: false,
+						},
+						{
+							href: "/dashboard/personas",
+							icon: Users,
+							label: "Personas",
+							sub: `${personaCount} custom · library available`,
+							primary: false,
+						},
+					].map((action) => (
+						<Link
+							key={action.href}
+							href={action.href}
+							className={`group flex items-center gap-3 rounded-xl border p-4 transition-all hover:-translate-y-0.5 ${
+								action.primary
+									? "border-(--pf-accent)/30 bg-(--pf-accent-soft) hover:shadow-[0_4px_16px_var(--pf-accent,#6366f1)20]"
+									: "border-border bg-card hover:border-(--pf-accent)/30 hover:shadow-sm"
+							}`}
+						>
+							<div
+								className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+									action.primary
+										? "bg-(--pf-accent) text-white"
+										: "bg-muted text-muted-foreground"
+								}`}
+							>
+								<action.icon className="h-5 w-5" />
+							</div>
+							<div className="flex-1 min-w-0">
+								<p
+									className={`text-sm font-semibold ${action.primary ? "text-(--pf-accent)" : "text-foreground"}`}
+								>
+									{action.label}
+								</p>
+								<p className="text-xs text-muted-foreground truncate">
+									{action.sub}
+								</p>
+							</div>
+							<ChevronRight
+								className={`h-4 w-4 shrink-0 transition-colors group-hover:text-(--pf-accent) ${action.primary ? "text-(--pf-accent)" : "text-muted-foreground"}`}
+							/>
+						</Link>
+					))}
+				</div>
+			)}
+
+			{/* Recent analyses */}
+			{analysesRaw.length > 0 && (
+				<div>
+					<div className="mb-5 flex items-center justify-between">
+						<div>
+							<h2 className="font-heading text-base font-semibold text-foreground">
+								Recent Analyses
+							</h2>
+							<p className="text-xs text-muted-foreground mt-0.5">
+								{lastActiveLabel
+									? `Last run ${lastActiveLabel}`
+									: `Your last ${Math.min(analysesRaw.length, 6)} runs`}
+							</p>
+						</div>
+						{allCount > 6 && (
+							<Link
+								href="/dashboard/analyses"
+								className="flex items-center gap-1 text-xs font-medium text-(--pf-accent) hover:opacity-80 transition-opacity"
+							>
+								View all {allCount} <ArrowRight className="h-3 w-3" />
 							</Link>
-						}
-					/>
-				) : (
-					<div className="grid gap-4 sm:grid-cols-2">
+						)}
+					</div>
+
+					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 						{analysesRaw.map((a) => (
 							<AnalysisCard
 								key={a.id}
@@ -118,8 +262,24 @@ export default async function DashboardOverviewPage() {
 							/>
 						))}
 					</div>
-				)}
-			</div>
+				</div>
+			)}
+
+			{analysesRaw.length === 0 && !isFirstTime && (
+				<EmptyState
+					icon="FlaskConical"
+					title="No analyses yet"
+					description="Run your first AI-powered UX analysis to see results here."
+					action={
+						<Link
+							href="/dashboard/new-analysis"
+							className="inline-flex items-center gap-2 rounded-xl bg-(--pf-accent) px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+						>
+							<PlusCircle className="h-4 w-4" /> Start your first analysis
+						</Link>
+					}
+				/>
+			)}
 		</div>
 	);
 }

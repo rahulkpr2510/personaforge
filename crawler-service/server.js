@@ -80,6 +80,18 @@ app.post("/crawl", async (req, res) => {
 	}
 });
 
+/** Derive a clean folder-safe site name from a URL, e.g. "https://www.example.com" → "example-com" */
+function siteNameFromUrl(rawUrl) {
+	try {
+		const hostname = new URL(rawUrl).hostname
+			.replace(/^www\./, "") // strip leading www.
+			.replace(/\./g, "-"); // dots → dashes (ImageKit folder-safe)
+		return hostname || "unknown";
+	} catch {
+		return "unknown";
+	}
+}
+
 async function crawlAndUpload(url, analysisId, opts) {
 	const { maxDepth, maxPages, deviceType } = opts;
 	const DESKTOP_VP = { width: 1280, height: 800 };
@@ -158,11 +170,12 @@ async function crawlAndUpload(url, analysisId, opts) {
 				),
 			]);
 
-			// Upload to ImageKit
+			// Upload to ImageKit — organised under a subfolder named after the site
+			const siteName = siteNameFromUrl(url);
 			const slug = `${analysisId}-p${visited.size}`;
 			const [fullUrl, vpUrl] = await Promise.all([
-				uploadBuffer(fullBuf, `${slug}-full.png`),
-				uploadBuffer(vpBuf, `${slug}-vp.png`),
+				uploadBuffer(fullBuf, `${slug}-full.png`, siteName),
+				uploadBuffer(vpBuf, `${slug}-vp.png`, siteName),
 			]);
 
 			pages.push({
@@ -193,11 +206,11 @@ async function crawlAndUpload(url, analysisId, opts) {
 	return { pages, origin };
 }
 
-async function uploadBuffer(buffer, fileName) {
+async function uploadBuffer(buffer, fileName, siteName = "unknown") {
 	const result = await imagekit.upload({
 		file: buffer.toString("base64"),
 		fileName,
-		folder: "/personaforge/screenshots",
+		folder: `/personaforge/screenshots/${siteName}`,
 		useUniqueFileName: true,
 	});
 	return result.url;

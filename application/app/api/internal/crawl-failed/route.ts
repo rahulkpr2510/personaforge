@@ -5,14 +5,18 @@ import { db } from "@/lib/db";
 
 const Schema = z.object({
   analysisId: z.string().cuid(),
-  reason: z.string().max(500),
+  error: z.string().max(500),
+  events: z.array(z.unknown()).optional(),
 });
 
 export async function POST(req: Request) {
   const headersList = await headers();
-  const secret = headersList.get("x-internal-secret");
+  const apiKey = headersList.get("x-internal-api-key");
 
-  if (!process.env.INTERNAL_SECRET || secret !== process.env.INTERNAL_SECRET) {
+  if (
+    !process.env.CRAWLER_INTERNAL_API_KEY ||
+    apiKey !== process.env.CRAWLER_INTERNAL_API_KEY
+  ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -25,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  const { analysisId, reason } = parsed.data;
+  const { analysisId, error } = parsed.data;
 
   await db.analysis
     .updateMany({
@@ -33,7 +37,7 @@ export async function POST(req: Request) {
         id: analysisId,
         status: { in: ["PENDING", "CRAWLING"] },
       },
-      data: { status: "FAILED", error: reason },
+      data: { status: "FAILED", error: error.slice(0, 500) },
     })
     .catch(console.error);
 

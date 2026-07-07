@@ -8,6 +8,14 @@ import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
 import { FrictionBar } from "@/components/dashboard/FrictionBar";
 import { PdfPreviewModal } from "@/components/dashboard/PdfPreviewModal";
 import { PersonaAccordion } from "@/components/dashboard/PersonaAccordion";
+import type { StructuredPositive, StructuredPainPoint, StructuredRecommendation } from "@/components/dashboard/PersonaAccordion";
+import { AnalysisLiveView } from "@/components/dashboard/AnalysisLiveView";
+import { ExecutiveScorecard } from "@/components/dashboard/ExecutiveScorecard";
+import { FocusGroupDiscussion } from "@/components/dashboard/FocusGroupDiscussion";
+import { AnalysisReliabilityCard } from "@/components/dashboard/AnalysisReliabilityCard";
+import { CoverageMeter } from "@/components/dashboard/CoverageMeter";
+import { CrawlerStatsPanel } from "@/components/dashboard/CrawlerStatsPanel";
+import { AnalysisTimeline } from "@/components/dashboard/AnalysisTimeline";
 import {
 	ArrowLeft,
 	Globe,
@@ -19,6 +27,9 @@ import {
 	CheckCircle2,
 	XCircle,
 	Sparkles,
+	BarChart3,
+	AlertCircle,
+	Search,
 } from "lucide-react";
 import { AnalysisFavicon } from "@/components/dashboard/AnalysisFavicon";
 import { cn } from "@/lib/utils";
@@ -85,6 +96,166 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 			})
 		: null;
 
+	// Parse executive scorecard from meta
+	const executiveScorecard = analysis.executiveScorecard as {
+		topStrengths?: Array<{
+			title: string;
+			evidence: string;
+			supportedByPersonas: string[];
+		}>;
+		topRisks?: Array<{
+			title: string;
+			evidence: string;
+			severity: "Low" | "Medium" | "High" | "Critical";
+			businessImpact: string;
+		}>;
+		businessRisk?: string;
+		adoptionComparison?: Array<{
+			label: string;
+			name: string;
+			score: number;
+			reasoning?: string;
+		}>;
+		confidenceDistribution?: { high: number; medium: number; low: number };
+		opportunityMatrix?: Array<{
+			title: string;
+			effort: "Low" | "Medium" | "High";
+			impact: "Low" | "Medium" | "High";
+			category: "Quick Win" | "Strategic" | "Fill-in" | "Avoid";
+		}>;
+		mostImpactfulRecommendation?: string;
+		mostAffectedPersona?: { label: string; name: string; frictionScore: number; adoptionLikelihood: number };
+		technicalDebtIndicator?: "Low" | "Medium" | "High";
+		conversionRisk?: number;
+		accessibilityRisk?: "Low" | "Medium" | "High";
+	} | null;
+
+	// Crawl coverage + reliability + stats — read from DB columns (migration applied)
+	// Falls back to meta blob for older analysis records created before migration
+	const metaBlob = (analysis.meta ?? {}) as Record<string, unknown>;
+
+	const crawlCoverage = (analysis.crawlCoverage ?? metaBlob.crawlCoverage) as {
+		pagesCrawled: number;
+		pagesDiscovered: number;
+		pagesBlocked: number;
+		pagesSkipped: number;
+		avgDepth: number;
+		coverageConfidence: "Low" | "Medium" | "High";
+		coveragePercent: number;
+		coverageNote: string;
+	} | null;
+
+	const analysisReliability = (analysis.analysisReliability ?? metaBlob.analysisReliability) as {
+		score: number;
+		evidenceBacked: number;
+		measured: number;
+		inferred: number;
+		speculative: number;
+		totalFindings: number;
+		reliabilityNote?: string;
+	} | null;
+
+	const crawlerStats = (analysis.crawlerStats ?? metaBlob.crawlerStats) as {
+		totalPages: number;
+		totalForms: number;
+		totalButtons: number;
+		totalImages: number;
+		totalLinks: number;
+		totalInputs: number;
+		totalHeadings: number;
+		totalWords: number;
+		avgWordCount: number;
+		avgDomDepth: number;
+		largestPageUrl?: string | null;
+		largestPageWords?: number;
+		fastestPageUrl?: string | null;
+		fastestPageMs?: number | null;
+		slowestPageUrl?: string | null;
+		slowestPageMs?: number | null;
+		skippedUrls?: string[];
+		blockedUrls?: string[];
+		redirectCount?: number;
+		brokenLinkCount?: number;
+		avgTtfbMs?: number | null;
+		avgLoadMs?: number | null;
+	} | null;
+
+	const researchGaps = (analysis.researchGaps ?? metaBlob.researchGaps) as string[] | null;
+
+	// Focus group discussion fields
+	const focusGroup = analysis.focusGroup;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const focusGroupExt = focusGroup as typeof focusGroup & Record<string, any>;
+	const fgDiscussion = focusGroupExt?.discussion as
+		| Array<{ speaker: string; statement: string; referencesPersona: string | null; turnType?: "opening" | "challenge" | "agreement" | "partial_agreement" | "moderator" | "conclusion" }>
+		| undefined;
+	const fgConsensus = focusGroupExt?.consensus as string[] | undefined;
+	const fgOpenQuestions = focusGroupExt?.openQuestions as string[] | undefined;
+	const fgResearchGaps = (focusGroupExt?.researchGaps as string[] | undefined) ?? (researchGaps ?? undefined);
+	const fgConflicts = focusGroupExt?.conflicts as {
+		items: Array<{
+			topic?: string;
+			reason?: string;
+			personasAgree?: string[];
+			personasDisagree?: string[];
+		}>
+	} | undefined;
+
+	// ── Live analysis view for in-progress statuses ─────────────────────────
+	if (
+		analysis.status === "PENDING" ||
+		analysis.status === "CRAWLING" ||
+		analysis.status === "ANALYZING"
+	) {
+		return (
+			<div className="space-y-6">
+				<Link
+					href="/dashboard/analyses"
+					className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+				>
+					<ArrowLeft className="h-4 w-4" /> All Analyses
+				</Link>
+
+				<div className="rounded-2xl border border-border bg-card overflow-hidden">
+					<div className="h-1.5 w-full bg-(--pf-accent)" />
+					<div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-4">
+							<AnalysisFavicon
+								domain={hostname}
+								className="h-14 w-14 rounded-2xl shrink-0"
+								size={64}
+							/>
+							<div>
+								<h1 className="font-heading text-xl font-bold text-foreground">
+									{hostname}
+								</h1>
+								<a
+									href={analysis.url}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="text-xs text-muted-foreground hover:text-(--pf-accent) transition-colors flex items-center gap-1 mt-0.5"
+								>
+									<Globe className="h-3 w-3" />
+									{analysis.url}
+								</a>
+							</div>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<StatusBadge status={analysis.status} />
+						</div>
+					</div>
+				</div>
+
+				<AnalysisLiveView
+					analysisId={id}
+					initialStatus={analysis.status}
+					initialPageCount={analysis.pages.length}
+					initialPersonaCount={analysis.personas.length}
+				/>
+			</div>
+		);
+	}
+
 	return (
 		<div className="space-y-8">
 			{/* Back link */}
@@ -95,9 +266,8 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 				<ArrowLeft className="h-4 w-4" /> All Analyses
 			</Link>
 
-			{/* ── Hero section ── */}
+			{/* ── Hero ── */}
 			<div className="rounded-2xl border border-border bg-card overflow-hidden">
-				{/* Top colour stripe */}
 				<div
 					className={cn(
 						"h-1.5 w-full",
@@ -114,7 +284,6 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 				/>
 				<div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-start gap-4">
-						{/* Favicon */}
 						<AnalysisFavicon
 							domain={hostname}
 							className="h-14 w-14 rounded-2xl shrink-0"
@@ -155,11 +324,7 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 						label: "Device",
 						value: analysis.deviceType === "MOBILE" ? "Mobile" : "Desktop",
 					},
-					{
-						icon: FileText,
-						label: "Pages crawled",
-						value: analysis.pages.length,
-					},
+					{ icon: FileText, label: "Pages crawled", value: analysis.pages.length },
 					{ icon: Users, label: "Personas", value: analysis.personas.length },
 					{
 						icon: CalendarDays,
@@ -199,7 +364,6 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 						</h2>
 					</div>
 					<div className="grid gap-0 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
-						{/* Sentiment */}
 						<div className="p-6">
 							<p className="text-xs text-muted-foreground mb-3">
 								Aggregate sentiment — how all personas felt overall
@@ -226,11 +390,9 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 								</p>
 							)}
 						</div>
-						{/* Friction */}
 						<div className="p-6">
 							<p className="text-xs text-muted-foreground mb-3">
-								Friction score — measures how difficult the product is to use (0
-								= frictionless, 100 = very frustrating)
+								Friction score — 0 = frictionless, 100 = very frustrating
 							</p>
 							{analysis.overallFrictionScore != null ? (
 								<FrictionBar score={analysis.overallFrictionScore} showLabel />
@@ -238,6 +400,22 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 								<p className="text-sm text-muted-foreground">
 									No friction data available
 								</p>
+							)}
+							{analysis.overallUxScore != null && (
+								<div className="mt-4 flex items-center gap-2">
+									<BarChart3 className="h-4 w-4 text-(--pf-accent)" />
+									<p className="text-sm text-muted-foreground">
+										UX Score:{" "}
+										<span className="font-bold text-foreground">
+											{analysis.overallUxScore}/100
+										</span>
+										{analysis.uxMaturityLevel && (
+											<span className="ml-2 text-xs text-muted-foreground">
+												· {analysis.uxMaturityLevel}
+											</span>
+										)}
+									</p>
+								</div>
 							)}
 						</div>
 					</div>
@@ -259,7 +437,62 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 				</div>
 			)}
 
-			{/* ── Persona Evaluations accordion ── */}
+			{/* ── Analysis Timeline ── */}
+			<AnalysisTimeline
+				status={analysis.status}
+				createdAt={analysis.createdAt}
+				completedAt={(analysis as typeof analysis & { completedAt?: Date | null }).completedAt}
+				pageCount={analysis.pages.length}
+				personaCount={analysis.personas.length}
+			/>
+
+			{/* ── Executive Scorecard ── */}
+			{analysis.status === "COMPLETED" && executiveScorecard && (
+				<div>
+					<div className="mb-4">
+						<h2 className="font-heading text-base font-semibold">
+							Executive Scorecard
+						</h2>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Evidence-grounded strengths, risks, and adoption comparison across
+							all personas
+						</p>
+					</div>
+					<ExecutiveScorecard
+						overallUxScore={analysis.overallUxScore}
+						topStrengths={executiveScorecard.topStrengths}
+						topRisks={executiveScorecard.topRisks}
+						adoptionComparison={executiveScorecard.adoptionComparison}
+						confidenceDistribution={executiveScorecard.confidenceDistribution}
+						mostImpactfulRecommendation={executiveScorecard.mostImpactfulRecommendation}
+						mostAffectedPersona={executiveScorecard.mostAffectedPersona}
+						conversionRisk={executiveScorecard.conversionRisk}
+						accessibilityRisk={executiveScorecard.accessibilityRisk}
+					/>
+				</div>
+			)}
+
+			{/* ── Analysis Reliability + Coverage ── */}
+			{analysis.status === "COMPLETED" && (analysisReliability || crawlCoverage) && (
+				<div>
+					<div className="mb-4">
+						<h2 className="font-heading text-base font-semibold">Analysis Reliability</h2>
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Evidence coverage, crawl scope, and confidence levels across all findings
+						</p>
+					</div>
+					<div className="grid gap-4 lg:grid-cols-2">
+						{analysisReliability && (
+							<AnalysisReliabilityCard reliability={analysisReliability} />
+						)}
+						{crawlCoverage && (
+							<CoverageMeter coverage={crawlCoverage} />
+						)}
+					</div>
+				</div>
+			)}
+
+			{/* ── Persona Evaluations ── */}
 			{analysis.personas.length > 0 && (
 				<div>
 					<div className="mb-4 flex items-center justify-between">
@@ -269,7 +502,7 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 							</h2>
 							<p className="text-xs text-muted-foreground mt-0.5">
 								Each persona independently browsed and evaluated your product —
-								expand for their full report
+								expand for their evidence-grounded report
 							</p>
 						</div>
 						<span className="text-xs text-muted-foreground shrink-0">
@@ -277,49 +510,55 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 							{analysis.personas.length > 1 ? "s" : ""}
 						</span>
 					</div>
-					<PersonaAccordion personas={analysis.personas} />
+					<PersonaAccordion
+					personas={analysis.personas.map((p) => ({
+						id: p.id,
+						label: p.label,
+						name: p.name,
+						age: p.age,
+						occupation: p.occupation,
+						sentiment: p.sentiment as "POSITIVE" | "NEUTRAL" | "NEGATIVE" | null,
+						frictionScore: p.frictionScore,
+						adoptionLikelihood: p.adoptionLikelihood,
+						adoptionReasoning: p.adoptionReasoning,
+						overallUxScore: p.overallUxScore,
+						uxCategoryScores: p.uxCategoryScores as Record<string, { score: number; reason: string }> | null,
+						firstImpressions: p.firstImpressions,
+						personaVoice: p.personaVoice,
+						positives: p.positives,
+						painPoints: p.painPoints,
+						recommendations: p.recommendations,
+						structuredPositives: p.structuredPositives as StructuredPositive[] | null,
+						structuredPainPoints: p.structuredPainPoints as StructuredPainPoint[] | null,
+						structuredRecommendations: p.structuredRecommendations as StructuredRecommendation[] | null,
+						accessibilityNotes: p.accessibilityNotes,
+						accessibilityFindings: p.accessibilityFindings as Array<{ finding: string; evidence: string; severity: string }> | null,
+					}))}
+				/>
 				</div>
 			)}
 
-			{/* ── Focus Group ── */}
-			{analysis.focusGroup && (
-				<div className="rounded-2xl border border-(--pf-accent)/20 bg-(--pf-accent-soft) overflow-hidden">
-					<div className="border-b border-(--pf-accent)/15 px-6 py-4">
-						<h2 className="font-heading text-sm font-semibold text-(--pf-accent) flex items-center gap-2">
-							<Users className="h-4 w-4" />
+			{/* ── Focus Group Discussion ── */}
+			{focusGroup && (
+				<div>
+					<div className="mb-4">
+						<h2 className="font-heading text-base font-semibold">
 							Focus Group Discussion
 						</h2>
-						<p className="text-xs text-(--pf-accent)/70 mt-0.5">
-							A synthesised debate between all personas — agreements,
-							disagreements, and shared concerns
+						<p className="text-xs text-muted-foreground mt-0.5">
+							Moderated debate — personas reference each other&apos;s
+							observations, surface disagreements, and reach consensus
 						</p>
 					</div>
-					<div className="p-6 space-y-4">
-						<p className="text-sm text-foreground leading-relaxed">
-							{analysis.focusGroup.summary}
-						</p>
-						{Array.isArray(
-							(analysis.focusGroup.conflicts as { items?: unknown[] })?.items,
-						) && (
-							<div className="space-y-3">
-								{(
-									analysis.focusGroup.conflicts as {
-										items: { topic?: string; reason?: string }[];
-									}
-								).items.map((c, i) => (
-									<div
-										key={i}
-										className="rounded-xl border border-(--pf-accent)/15 bg-background/60 p-4"
-									>
-										<p className="text-sm font-semibold text-foreground mb-1">
-											{c.topic}
-										</p>
-										<p className="text-sm text-muted-foreground">{c.reason}</p>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
+					<FocusGroupDiscussion
+						summary={focusGroup.summary}
+						moderatorSummary={focusGroup.moderatorSummary}
+						discussion={fgDiscussion}
+						consensus={fgConsensus}
+						openQuestions={fgOpenQuestions}
+						researchGaps={fgResearchGaps}
+						conflicts={fgConflicts}
+					/>
 				</div>
 			)}
 
@@ -331,10 +570,16 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 							Crawled Pages
 						</h2>
 						<p className="text-xs text-muted-foreground mt-0.5">
-							Every page visited during this analysis — friction scores show how
-							difficult each page is to use
+							Every page visited during this analysis — all scores are based on
+							directly observed data from these pages
 						</p>
 					</div>
+					{/* Crawler Stats Panel */}
+					{crawlerStats && (
+						<div className="mb-4">
+							<CrawlerStatsPanel stats={crawlerStats} />
+						</div>
+					)}
 					<div className="rounded-2xl border border-border bg-card overflow-hidden">
 						<table className="w-full text-sm">
 							<thead>
@@ -342,11 +587,14 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
 										Page
 									</th>
-									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-										Depth
+									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">
+										Type
 									</th>
 									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">
-										Forms
+										Buttons
+									</th>
+									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">
+										Words
 									</th>
 									<th className="px-5 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
 										Friction
@@ -367,11 +615,16 @@ export default async function AnalysisDetailPage({ params }: PageParams) {
 												{page.url}
 											</p>
 										</td>
-										<td className="px-5 py-3.5 text-muted-foreground">
-											{page.depth}
+										<td className="px-5 py-3.5 text-muted-foreground hidden lg:table-cell">
+											<span className="text-xs rounded-full bg-muted/60 border border-border px-2 py-0.5 font-mono">
+												{page.pageType ?? "UNKNOWN"}
+											</span>
 										</td>
-										<td className="px-5 py-3.5 text-muted-foreground hidden sm:table-cell">
-											{page.formsCount}
+										<td className="px-5 py-3.5 text-muted-foreground hidden sm:table-cell tabular-nums">
+											{page.buttonsCount}
+										</td>
+										<td className="px-5 py-3.5 text-muted-foreground hidden sm:table-cell tabular-nums">
+											{page.wordCount ?? page.textLength}
 										</td>
 										<td className="px-5 py-3.5 w-44">
 											<FrictionBar

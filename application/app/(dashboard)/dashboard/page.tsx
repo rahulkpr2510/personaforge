@@ -4,9 +4,9 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { AnalysisCard } from "@/components/dashboard/AnalysisCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { DashboardGreeting } from "@/components/dashboard/DashboardGreeting";
+import { RecentAnalysesSection } from "@/components/dashboard/RecentAnalysesSection";
 import {
 	PlusCircle,
 	ArrowRight,
@@ -28,7 +28,6 @@ export default async function DashboardOverviewPage() {
 			db.analysis.findMany({
 				where: { userId: user.id },
 				orderBy: { createdAt: "desc" },
-				take: 6,
 				include: {
 					_count: { select: { pages: true, personas: true } },
 					focusGroup: { select: { id: true } },
@@ -46,26 +45,23 @@ export default async function DashboardOverviewPage() {
 	const successRate =
 		allCount > 0 ? Math.round((completedTotal / allCount) * 100) : null;
 
-	// Time since last analysis
-	const lastAnalysis = analysesRaw[0];
-	const hoursSinceLast = lastAnalysis
-		? Math.round(
-				(Date.now() - new Date(lastAnalysis.createdAt).getTime()) / 36e5,
-			)
-		: null;
-	const lastActiveLabel =
-		hoursSinceLast === null
-			? null
-			: hoursSinceLast < 1
-				? "less than an hour ago"
-				: hoursSinceLast < 24
-					? `${hoursSinceLast}h ago`
-					: `${Math.round(hoursSinceLast / 24)}d ago`;
-
 	const isFirstTime = allCount === 0;
 
+	// Pass all analyses to client component which handles date filtering
+	const analyses = analysesRaw.map((a) => ({
+		id: a.id,
+		url: a.url,
+		status: a.status,
+		deviceType: a.deviceType,
+		overallSentiment: a.overallSentiment,
+		overallFrictionScore: a.overallFrictionScore,
+		createdAt: a.createdAt.toISOString(),
+		_count: a._count,
+		error: a.error,
+	}));
+
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			{/* Greeting banner */}
 			<DashboardGreeting
 				firstName={firstName}
@@ -219,53 +215,15 @@ export default async function DashboardOverviewPage() {
 				</div>
 			)}
 
-			{/* Recent analyses */}
-			{analysesRaw.length > 0 && (
-				<div>
-					<div className="mb-5 flex items-center justify-between">
-						<div>
-							<h2 className="font-heading text-base font-semibold text-foreground">
-								Recent Analyses
-							</h2>
-							<p className="text-xs text-muted-foreground mt-0.5">
-								{lastActiveLabel
-									? `Last run ${lastActiveLabel}`
-									: `Your last ${Math.min(analysesRaw.length, 6)} runs`}
-							</p>
-						</div>
-						{allCount > 6 && (
-							<Link
-								href="/dashboard/analyses"
-								className="flex items-center gap-1 text-xs font-medium text-(--pf-accent) hover:opacity-80 transition-opacity"
-							>
-								View all {allCount} <ArrowRight className="h-3 w-3" />
-							</Link>
-						)}
-					</div>
-
-					<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{analysesRaw.map((a) => (
-							<AnalysisCard
-								key={a.id}
-								analysis={{
-									id: a.id,
-									url: a.url,
-									status: a.status,
-									deviceType: a.deviceType,
-									overallSentiment: a.overallSentiment,
-									overallFrictionScore: a.overallFrictionScore,
-									createdAt: a.createdAt.toISOString(),
-									_count: a._count,
-									error: a.error,
-								}}
-								href={`/dashboard/analyses/${a.id}`}
-							/>
-						))}
-					</div>
-				</div>
+			{/* Recent analyses — client component with date tabs */}
+			{analyses.length > 0 && (
+				<RecentAnalysesSection
+					analyses={analyses}
+					allCount={allCount}
+				/>
 			)}
 
-			{analysesRaw.length === 0 && !isFirstTime && (
+			{analyses.length === 0 && !isFirstTime && (
 				<EmptyState
 					icon="FlaskConical"
 					title="No analyses yet"

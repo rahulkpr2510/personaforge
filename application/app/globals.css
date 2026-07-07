@@ -187,6 +187,8 @@
 	background-size: 200% 100%;
 	animation: shimmer 1.6s ease-in-out infinite;
 	border-radius: var(--radius);
+	will-change: background-position;
+	transform: translateZ(0); /* promote to own compositor layer */
 }
 
 /* Text highlight underline (MagicUI inspired) */
@@ -255,3 +257,33 @@
 	}
 }
 
+@keyframes slideUp {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes fadeSlideUp {
+	from {
+		opacity: 0;
+		transform: translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

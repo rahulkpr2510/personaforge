@@ -56,16 +56,22 @@ export function AnalysisCard({ analysis, href, className }: AnalysisCardProps) {
 		<motion.div
 			initial={{ opacity: 0, y: 8 }}
 			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+			whileHover={{ y: -4 }}
+			whileTap={{ scale: 0.99 }}
+			transition={{
+				opacity: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+				default: { type: "spring", stiffness: 220, damping: 18, mass: 0.8 },
+			}}
 			onHoverStart={() => setHovered(true)}
 			onHoverEnd={() => setHovered(false)}
 			className="h-full"
+			style={{ willChange: "transform" }}
 		>
 			<Link
 				href={href}
 				className={cn(
-					"group flex flex-col rounded-xl border border-border bg-card overflow-hidden transition-all duration-300 h-full",
-					"hover:border-(--pf-accent)/40 hover:shadow-[0_4px_24px_-4px_var(--pf-accent,#6366f1)22]",
+					"group relative flex flex-col rounded-xl border bg-card overflow-hidden transition-all duration-300 h-full",
+					hovered ? "border-(--pf-accent)/40 shadow-xl" : "border-border shadow-sm",
 					className,
 				)}
 			>
@@ -74,16 +80,16 @@ export function AnalysisCard({ analysis, href, className }: AnalysisCardProps) {
 					className="shrink-0 h-[2px] bg-linear-to-r from-(--pf-accent)/0 via-(--pf-accent) to-(--pf-accent)/0"
 					animate={{ scaleX: hovered ? 1 : 0, opacity: hovered ? 1 : 0 }}
 					initial={{ scaleX: 0, opacity: 0 }}
-					transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+					transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
 				/>
 
-				{/* Main card body — grows to fill */}
-				<div className="flex-1 p-5">
+				{/* Main card body */}
+				<div className="flex-1 p-4">
 					{/* Header */}
 					<div className="flex items-start justify-between gap-3">
 						<div className="flex min-w-0 items-center gap-3">
 							{/* Favicon orb */}
-							<div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted border border-border overflow-hidden">
+							<div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted border border-border overflow-hidden">
 								{/* eslint-disable-next-line @next/next/no-img-element */}
 								<img
 									src={`https://www.google.com/s2/favicons?domain=${hostname}&sz=32`}
@@ -118,7 +124,7 @@ export function AnalysisCard({ analysis, href, className }: AnalysisCardProps) {
 					{/* Friction score */}
 					{analysis.status === "COMPLETED" &&
 						analysis.overallFrictionScore != null && (
-							<div className="mt-4">
+							<div className="mt-3">
 								<div className="flex items-center justify-between mb-1.5">
 									<p className="text-xs font-medium text-muted-foreground">
 										Friction Score
@@ -153,8 +159,8 @@ export function AnalysisCard({ analysis, href, className }: AnalysisCardProps) {
 						</p>
 					)}
 
-					{/* Footer metadata */}
-					<div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 pt-3">
+					{/* Footer metadata — always visible */}
+					<div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2.5">
 						{analysis.overallSentiment && (
 							<SentimentBadge sentiment={analysis.overallSentiment} />
 						)}
@@ -188,18 +194,18 @@ export function AnalysisCard({ analysis, href, className }: AnalysisCardProps) {
 					</div>
 				</div>
 
-				{/* Slide-up CTA footer — appears on hover below the card body */}
-				<AnimatePresence>
+				{/* CTA — expands from bottom, does NOT overlay */}
+				<AnimatePresence initial={false}>
 					{hovered && (
 						<motion.div
 							key="cta"
 							initial={{ height: 0, opacity: 0 }}
-							animate={{ height: 40, opacity: 1 }}
+							animate={{ height: 36, opacity: 1 }}
 							exit={{ height: 0, opacity: 0 }}
-							transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+							transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
 							className="overflow-hidden shrink-0"
 						>
-							<div className="flex items-center justify-center gap-2 h-10 border-t border-(--pf-accent)/20 bg-(--pf-accent-soft) text-xs font-semibold text-(--pf-accent)">
+							<div className="h-9 flex items-center justify-center gap-2 border-t border-(--pf-accent)/20 bg-(--pf-accent-soft) text-xs font-semibold text-(--pf-accent)">
 								View full report <ArrowRight className="h-3.5 w-3.5" />
 							</div>
 						</motion.div>

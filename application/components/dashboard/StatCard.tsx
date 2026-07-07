@@ -79,13 +79,19 @@ export function StatCard({
 
 	return (
 		<motion.div
-			initial={{ opacity: 0, y: 10 }}
+			initial={{ opacity: 0, y: 4 }}
 			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+			whileHover={{ y: -6, scale: 1.02 }}
+			whileTap={{ scale: 0.99 }}
+			transition={{ 
+				opacity: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
+				default: { type: "spring", stiffness: 220, damping: 18, mass: 0.8 }
+			}}
 			onHoverStart={() => setHovered(true)}
 			onHoverEnd={() => setHovered(false)}
+			style={{ willChange: "transform" }}
 			className={cn(
-				"group relative overflow-hidden rounded-xl border border-border bg-card p-5 cursor-default",
+				"group relative overflow-hidden rounded-xl border border-border bg-card p-5 cursor-default hover:shadow-2xl transition-shadow duration-500",
 				className,
 			)}
 		>
@@ -136,7 +142,7 @@ export function StatCard({
 						styles.icon,
 					)}
 					whileHover={{ scale: 1.12, rotate: -6 }}
-					transition={{ type: "spring", stiffness: 400, damping: 18 }}
+					transition={{ type: "spring", stiffness: 300, damping: 18, mass: 0.6 }}
 				>
 					<Icon name={icon} className="h-5 w-5" strokeWidth={1.7} />
 				</motion.div>

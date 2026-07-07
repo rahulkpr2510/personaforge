@@ -89,14 +89,20 @@ export function PersonaCard({
 		<motion.div
 			initial={{ opacity: 0, scale: 0.98 }}
 			animate={{ opacity: 1, scale: 1 }}
-			transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+			whileHover={{ y: -6, scale: 1.02 }}
+			whileTap={{ scale: 0.99 }}
+			transition={{ 
+				opacity: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+				default: { type: "spring", stiffness: 220, damping: 18, mass: 0.8 }
+			}}
+			style={{ willChange: "transform" }}
 			className={cn(
-				"group relative flex flex-col h-full rounded-xl border bg-card transition-all duration-200",
+				"group relative flex flex-col h-full rounded-xl border bg-card transition-shadow duration-500",
 				selectable
 					? selected
-						? "border-(--pf-accent) ring-2 ring-(--pf-accent)/20 shadow-sm cursor-pointer"
-						: "border-border hover:border-(--pf-accent)/50 cursor-pointer"
-					: "border-border",
+						? "border-(--pf-accent) ring-2 ring-(--pf-accent)/20 shadow-md cursor-pointer"
+						: "border-border cursor-pointer hover:border-(--pf-accent)/40 hover:shadow-xl"
+					: "border-border hover:shadow-xl",
 				className,
 			)}
 			onClick={handleClick}
@@ -220,7 +226,7 @@ export function PersonaCard({
 							initial={{ height: 0, opacity: 0 }}
 							animate={{ height: "auto", opacity: 1 }}
 							exit={{ height: 0, opacity: 0 }}
-							transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+							transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
 							className="overflow-hidden"
 						>
 							<div className="mt-4 space-y-3 border-t border-border pt-4">

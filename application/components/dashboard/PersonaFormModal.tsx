@@ -1,6 +1,6 @@
 // components/dashboard/PersonaFormModal.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Plus, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -47,6 +47,13 @@ export function PersonaFormModal({
 	const [tagInput, setTagInput] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+
+	// Reset form when initial (editing target) changes
+	useEffect(() => {
+		setForm({ ...defaultForm, ...initial });
+		setTagInput("");
+		setError(null);
+	}, [initial]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();

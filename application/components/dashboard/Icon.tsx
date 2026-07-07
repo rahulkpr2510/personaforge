@@ -15,7 +15,7 @@ import {
 	type LucideProps
 } from "lucide-react";
 
-export const iconMap = {
+const iconMap = {
 	LayoutDashboard,
 	FlaskConical,
 	Users,

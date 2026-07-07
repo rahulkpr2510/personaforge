@@ -1,7 +1,7 @@
 // app/(dashboard)/dashboard/analyses/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { AnalysisCard } from "@/components/dashboard/AnalysisCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
@@ -133,55 +133,78 @@ export default function AnalysesPage() {
 				</div>
 			)}
 
-			{loading ? (
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{[...Array(6)].map((_, i) => (
-						<SkeletonCard key={i} />
-					))}
-				</div>
-			) : filtered.length === 0 && all.length === 0 ? (
-				<EmptyState
-					icon="FlaskConical"
-					title="No analyses yet"
-					description="Start by analysing a product or landing page with your chosen personas. You'll get detailed friction scores, sentiment analysis, and recommendations."
-					action={
-						<Link
-							href="/dashboard/new-analysis"
-							className="inline-flex items-center gap-2 rounded-xl bg-(--pf-accent) px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-						>
-							<PlusCircle className="h-4 w-4" /> New Analysis
-						</Link>
-					}
-				/>
-			) : filtered.length === 0 ? (
-				<div className="py-14 text-center">
-					<p className="text-sm text-muted-foreground">
-						No {statusLabels[filter].toLowerCase()} analyses.
-					</p>
-					<button
-						onClick={() => setFilter("ALL")}
-						className="mt-2 text-xs text-(--pf-accent) hover:opacity-80 transition-opacity"
+			<AnimatePresence mode="wait" initial={false}>
+				{loading ? (
+					<motion.div
+						key="skeleton"
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={{ duration: 0.2 }}
+						className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
 					>
-						Clear filter
-					</button>
-				</div>
-			) : (
-				<motion.div
-					key={filter}
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					transition={{ duration: 0.2 }}
-					className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-				>
-					{filtered.map((a) => (
-						<AnalysisCard
-							key={a.id}
-							analysis={a}
-							href={`/dashboard/analyses/${a.id}`}
+						{[...Array(6)].map((_, i) => (
+							<SkeletonCard key={i} />
+						))}
+					</motion.div>
+				) : filtered.length === 0 && all.length === 0 ? (
+					<motion.div
+						key="empty-all"
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						transition={{ duration: 0.2 }}
+					>
+						<EmptyState
+							icon="FlaskConical"
+							title="No analyses yet"
+							description="Start by analysing a product or landing page with your chosen personas. You'll get detailed friction scores, sentiment analysis, and recommendations."
+							action={
+								<Link
+									href="/dashboard/new-analysis"
+									className="inline-flex items-center gap-2 rounded-xl bg-(--pf-accent) px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+								>
+									<PlusCircle className="h-4 w-4" /> New Analysis
+								</Link>
+							}
 						/>
-					))}
-				</motion.div>
-			)}
+					</motion.div>
+				) : filtered.length === 0 ? (
+					<motion.div
+						key="empty-filter"
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						transition={{ duration: 0.2 }}
+						className="py-14 text-center"
+					>
+						<p className="text-sm text-muted-foreground">
+							No {statusLabels[filter].toLowerCase()} analyses.
+						</p>
+						<button
+							onClick={() => setFilter("ALL")}
+							className="mt-2 text-xs text-(--pf-accent) hover:opacity-80 transition-opacity"
+						>
+							Clear filter
+						</button>
+					</motion.div>
+				) : (
+					<motion.div
+						key="cards"
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={{ duration: 0.2 }}
+						className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 pb-3"
+					>
+						{filtered.map((a) => (
+							<AnalysisCard
+								key={a.id}
+								analysis={a}
+								href={`/dashboard/analyses/${a.id}`}
+							/>
+						))}
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

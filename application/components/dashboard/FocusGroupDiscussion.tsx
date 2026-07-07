@@ -67,9 +67,10 @@ export function FocusGroupDiscussion({
 }: FocusGroupDiscussionProps) {
   const [showFullDiscussion, setShowFullDiscussion] = useState(false);
 
+  const discussionList = discussion ?? [];
   const displayedTurns = showFullDiscussion
-    ? discussion
-    : discussion.slice(0, 6);
+    ? discussionList
+    : discussionList.slice(0, 6);
 
   const conflictItems = conflicts?.items ?? [];
 
@@ -94,11 +95,11 @@ export function FocusGroupDiscussion({
       </div>
 
       {/* ── Discussion turns ── */}
-      {discussion.length > 0 && (
+      {discussionList.length > 0 && (
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           <div className="border-b border-border px-5 py-3.5 flex items-center gap-2">
             <span className="text-xs font-semibold text-muted-foreground">Debate Transcript</span>
-            <span className="ml-auto text-xs text-muted-foreground">{discussion.length} turns</span>
+            <span className="ml-auto text-xs text-muted-foreground">{discussionList.length} turns</span>
           </div>
           <div className="px-5 py-4 space-y-4">
             <AnimatePresence initial={false}>
@@ -175,7 +176,7 @@ export function FocusGroupDiscussion({
               })}
             </AnimatePresence>
 
-            {discussion.length > 6 && (
+            {discussionList.length > 6 && (
               <button
                 onClick={() => setShowFullDiscussion(!showFullDiscussion)}
                 className="flex items-center gap-1.5 text-xs text-(--pf-accent) hover:text-(--pf-accent)/70 transition-colors font-medium"
@@ -188,7 +189,7 @@ export function FocusGroupDiscussion({
                 </motion.span>
                 {showFullDiscussion
                   ? "Show less"
-                  : `Show ${discussion.length - 6} more turns`}
+                  : `Show ${discussionList.length - 6} more turns`}
               </button>
             )}
           </div>

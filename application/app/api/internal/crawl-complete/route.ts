@@ -633,15 +633,15 @@ export async function POST(req: Request) {
         ? Math.max(...pages.map((p) => p.wordCount ?? 0))
         : 0,
       fastestPageUrl: (() => {
-        const perf = pages.filter((p) => (p.performance as { ttfbMs?: number } | null)?.ttfbMs != null);
+        const perf = pages.filter((p) => (p.performance as { loadEventMs?: number } | null)?.loadEventMs != null);
         return perf.length > 0 ? perf.reduce((best, p) => {
-          const bTtfb = (best.performance as { ttfbMs?: number } | null)?.ttfbMs ?? Infinity;
-          const pTtfb = (p.performance as { ttfbMs?: number } | null)?.ttfbMs ?? Infinity;
-          return pTtfb < bTtfb ? p : best;
+          const bLoad = (best.performance as { loadEventMs?: number } | null)?.loadEventMs ?? Infinity;
+          const pLoad = (p.performance as { loadEventMs?: number } | null)?.loadEventMs ?? Infinity;
+          return pLoad < bLoad ? p : best;
         }).url : null;
       })(),
       fastestPageMs: (() => {
-        const vals = pages.map((p) => (p.performance as { ttfbMs?: number } | null)?.ttfbMs).filter((v): v is number => v != null);
+        const vals = pages.map((p) => (p.performance as { loadEventMs?: number } | null)?.loadEventMs).filter((v): v is number => v != null);
         return vals.length > 0 ? Math.min(...vals) : null;
       })(),
       slowestPageUrl: (() => {

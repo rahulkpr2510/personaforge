@@ -108,20 +108,34 @@ async function triggerCrawler(
   const crawlerUrl = process.env.CRAWLER_SERVICE_URL;
   if (!crawlerUrl) throw new Error("CRAWLER_SERVICE_URL is not set");
 
+  const internalApiKey = process.env.CRAWLER_INTERNAL_API_KEY;
+  if (!internalApiKey) throw new Error("CRAWLER_INTERNAL_API_KEY is not set");
+
+  const callbackBaseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!callbackBaseUrl) throw new Error("NEXT_PUBLIC_APP_URL is not set");
+
+  const payload = {
+    analysisId,
+    url,
+    deviceType,
+    maxDepth: 2,
+    maxPages: 8,
+    callbackBaseUrl,
+    internalApiKey,
+  };
+
+  console.log(`[analyses] Triggering crawler for ${analysisId}:`, {
+    crawlerUrl,
+    payload: { ...payload, internalApiKey: "[REDACTED]" },
+  });
+
   const res = await fetch(`${crawlerUrl}/crawl`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-crawler-secret": process.env.CRAWLER_SECRET ?? "",
+      "x-internal-api-key": internalApiKey,
     },
-    body: JSON.stringify({
-      analysisId,
-      url,
-      deviceType,
-      maxDepth: 2,
-      maxPages: 8,
-      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/internal/crawl-complete`,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

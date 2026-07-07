@@ -265,7 +265,7 @@ export default function AdminUsersPage() {
 											{user.role}
 										</span>
 									</div>
-									<p className="text-xs text-muted-foreground truncate">
+									<p className="text-xs text-muted-foreground truncate mt-2">
 										{user.email}
 									</p>
 								</div>

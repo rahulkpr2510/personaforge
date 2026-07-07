@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
 import { FrictionBar } from "@/components/dashboard/FrictionBar";
 import { PersonaAccordion } from "@/components/dashboard/PersonaAccordion";
+import type { StructuredPositive, StructuredPainPoint, StructuredRecommendation } from "@/components/dashboard/PersonaAccordion";
 import {
 	ArrowLeft,
 	Globe,
@@ -289,7 +290,31 @@ export default async function AdminAnalysisDetailPage({ params }: PageParams) {
 							{analysis.personas.length > 1 ? "s" : ""}
 						</span>
 					</div>
-					<PersonaAccordion personas={analysis.personas} />
+					<PersonaAccordion
+					personas={analysis.personas.map((p) => ({
+						id: p.id,
+						label: p.label,
+						name: p.name,
+						age: p.age,
+						occupation: p.occupation,
+						sentiment: p.sentiment as "POSITIVE" | "NEUTRAL" | "NEGATIVE" | null,
+						frictionScore: p.frictionScore,
+						adoptionLikelihood: p.adoptionLikelihood,
+						adoptionReasoning: p.adoptionReasoning,
+						overallUxScore: p.overallUxScore,
+						uxCategoryScores: p.uxCategoryScores as Record<string, { score: number; reason: string }> | null,
+						firstImpressions: p.firstImpressions,
+						personaVoice: p.personaVoice,
+						positives: p.positives,
+						painPoints: p.painPoints,
+						recommendations: p.recommendations,
+						structuredPositives: p.structuredPositives as StructuredPositive[] | null,
+						structuredPainPoints: p.structuredPainPoints as StructuredPainPoint[] | null,
+						structuredRecommendations: p.structuredRecommendations as StructuredRecommendation[] | null,
+						accessibilityNotes: p.accessibilityNotes,
+						accessibilityFindings: p.accessibilityFindings as Array<{ finding: string; evidence: string; severity: string }> | null,
+					}))}
+				/>
 				</div>
 			)}
 

@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "./db";
 
-export async function getOrCreateUser() {
+async function getOrCreateUser() {
   const { userId } = await auth();
   if (!userId) return null;
 

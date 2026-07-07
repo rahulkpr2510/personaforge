@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -34,7 +35,7 @@ model Persona {
   isPrebuilt       Boolean           @default(false)
   isActive         Boolean           @default(true)
   tags             String[]          @default([])
-  metadata         Json?
+  metadata         Json? // Stores: digitalLiteracy, browsingHabits, decisionCriteria, personality, trustTriggers, dealBreakers
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   analysisPersonas AnalysisPersona[]
@@ -56,6 +57,13 @@ model Analysis {
   maxPages             Int                @default(8)
   overallSentiment     SentimentLabel?
   overallFrictionScore Int?
+  overallUxScore       Int? // Weighted average across all personas and categories
+  uxMaturityLevel      String? // Emerging | Developing | Established | Advanced
+  executiveScorecard   Json? // { topStrengths, topRisks, businessRisk, adoptionComparison, opportunityMatrix, confidenceDistribution, mostImpactfulRecommendation, mostAffectedPersona, technicalDebtIndicator, conversionRisk, accessibilityRisk }
+  crawlCoverage        Json? // CrawlCoverage — pages crawled vs discovered, coverage confidence
+  analysisReliability  Json? // AnalysisReliability — score, evidenceBacked, inferred, speculative counts
+  crawlerStats         Json? // CrawlerStats — raw metrics: forms, buttons, images, links, perf, etc.
+  researchGaps         Json? // String[] — areas not analyzed due to limited crawl coverage
   summary              String?
   meta                 Json?
   error                String?
@@ -82,12 +90,18 @@ model Page {
   title              String?
   depth              Int
   content            String?
+  pageType           String?      // LOGIN | LISTING | DETAIL | CHECKOUT | DOCS | MARKETING | SETTINGS | UNKNOWN
   formsCount         Int          @default(0)
   buttonsCount       Int          @default(0)
   linksCount         Int          @default(0)
+  inputCount         Int          @default(0)
   textLength         Int          @default(0)
+  wordCount          Int          @default(0)
+  interactionCount   Int          @default(0) // buttons + links
   hasAuthForm        Boolean      @default(false)
   primaryActionLabel String?
+  ctaTexts           Json? // String[] of top CTA button labels
+  headingStructure   Json? // String[] of h1-h3 texts
   performance        Json?
   accessibility      Json?
   navStructure       Json?
@@ -116,30 +130,41 @@ model Screenshot {
 }
 
 model AnalysisPersona {
-  id                 String          @id @default(cuid())
-  analysisId         String
-  personaId          String?
-  label              String
-  name               String
-  age                Int
-  occupation         String
-  technicalLevel     TechnicalLevel
-  goals              String
-  frustrations       String
-  firstImpressions   String?
-  positives          String?
-  painPoints         String?
-  recommendations    String?
-  accessibilityNotes String?
-  adoptionLikelihood Int?
-  sentiment          SentimentLabel?
-  frictionScore      Int?
-  evidence           Json?
-  rawModelOutput     Json?
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  analysis           Analysis        @relation(fields: [analysisId], references: [id])
-  persona            Persona?        @relation(fields: [personaId], references: [id])
+  id                      String          @id @default(cuid())
+  analysisId              String
+  personaId               String?
+  label                   String
+  name                    String
+  age                     Int
+  occupation              String
+  technicalLevel          TechnicalLevel
+  goals                   String
+  frustrations            String
+  // Core evaluation
+  firstImpressions        String?
+  personaVoice            String? // How this persona would describe the site to a friend
+  sentiment               SentimentLabel?
+  frictionScore           Int?
+  adoptionLikelihood      Int?
+  adoptionReasoning       String? // Why this specific adoption score
+  // Structured evaluation data
+  overallUxScore          Int? // Weighted average of uxCategoryScores
+  uxCategoryScores        Json? // { navigation, accessibility, contentClarity, ... } — each { score, reason }
+  structuredPositives     Json? // StructuredPositive[]
+  structuredPainPoints    Json? // StructuredPainPoint[] with severity, confidence, affectedPages
+  structuredRecommendations Json? // StructuredRecommendation[] with full causal chain
+  accessibilityFindings   Json? // AccessibilityFinding[]
+  accessibilityNotes      String?
+  // Legacy string arrays (kept for backwards compatibility)
+  positives               String?
+  painPoints              String?
+  recommendations         String?
+  evidence                Json?
+  rawModelOutput          Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  analysis                Analysis        @relation(fields: [analysisId], references: [id])
+  persona                 Persona?        @relation(fields: [personaId], references: [id])
 
   @@index([analysisId])
   @@index([personaId])
@@ -147,12 +172,18 @@ model AnalysisPersona {
 }
 
 model FocusGroupInsight {
-  id         String   @id @default(cuid())
-  analysisId String   @unique
-  summary    String
-  conflicts  Json
-  createdAt  DateTime @default(now())
-  analysis   Analysis @relation(fields: [analysisId], references: [id])
+  id               String   @id @default(cuid())
+  analysisId       String   @unique
+  summary          String   // Top-line summary (backwards-compatible)
+  moderatorSummary String?  // 3–4 sentence moderated synthesis
+  discussion       Json?    // FocusGroupTurn[] — turn-by-turn debate with cross-references
+  consensus        Json?    // String[] — points all personas agree on
+  openQuestions    Json?    // String[] — unresolved disagreements
+  researchGaps     Json?    // String[] — areas not analyzed due to crawl limitations
+  agreementMatrix  Json?    // Record<personaName, Record<personaName, "agree"|"disagree"|"neutral">>
+  conflicts        Json     // { items: FocusGroupConflict[] }
+  createdAt        DateTime @default(now())
+  analysis         Analysis @relation(fields: [analysisId], references: [id])
 }
 
 enum UserRole {

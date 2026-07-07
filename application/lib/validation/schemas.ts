@@ -148,7 +148,7 @@ const CrawledPageSchema = z.object({
     .max(4),
 });
 
-export const CrawlCompletePayloadSchema = z.object({
+const CrawlCompletePayloadSchema = z.object({
   analysisId: z.string().cuid(),
   result: z.object({
     pages: z.array(CrawledPageSchema).min(1).max(20),

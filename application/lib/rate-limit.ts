@@ -39,7 +39,7 @@ export interface RateLimitResult {
   resetAt: number; // Unix timestamp ms
 }
 
-export function checkRateLimit({
+function checkRateLimit({
   key,
   limit,
   windowMs,

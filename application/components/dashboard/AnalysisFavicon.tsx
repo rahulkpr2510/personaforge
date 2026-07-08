@@ -1,4 +1,3 @@
-// components/dashboard/AnalysisFavicon.tsx
 "use client";
 import { useState } from "react";
 import { Globe } from "lucide-react";

@@ -1,4 +1,3 @@
-// components/dashboard/PageHeader.tsx
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {

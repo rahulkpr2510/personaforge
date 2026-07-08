@@ -1,6 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
-// ─── Color System ─────────────────────────────────────────────────────────────
 const C = {
 	brand: "#6366F1",
 	brandDark: "#4338CA",
@@ -384,7 +383,6 @@ const s = StyleSheet.create({
 	statBoxSub: { fontSize: 7.5, marginTop: 3, lineHeight: 1.3 },
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function parseList(v: string | null | undefined): string[] {
 	if (!v) return [];
 	try {
@@ -424,7 +422,6 @@ function severityColor(sev: string) {
 	return { bg: C.infoLight, text: C.info };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 function PageFooter({
 	hostname,
 	section,
@@ -567,7 +564,6 @@ function Card({
 	);
 }
 
-// ─── Main Document ────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function AnalysisPdfReport({ analysis }: { analysis: any }) {
 	const hostname = (() => {

@@ -1,26 +1,17 @@
-// lib/api/client.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Centralized Axios instance for all client-side API calls.
-// Used ONLY in Client Components — never in Server Components or API routes.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { AppError, ErrorCategory, type ApiFailureResponse, type ApiSuccessResponse } from "./types";
 import { shouldRetry, calcRetryDelay, sleep, DEFAULT_RETRY_CONFIG } from "./retry";
-// Helper function to generate UUIDs in the browser without Node dependencies.
+
 function generateUUID(): string {
   if (typeof window !== "undefined" && window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID();
   }
-  // Fallback for non-secure contexts / environments where randomUUID is not available
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
-
-// ── Timeout constants (ms) ──────────────────────────────────────────────────
 
 export const TIMEOUTS = {
   general: 15_000,
@@ -29,22 +20,15 @@ export const TIMEOUTS = {
   polling: 5_000,
 } as const;
 
-// ── Client version ──────────────────────────────────────────────────────────
-
 const CLIENT_VERSION =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_APP_VERSION) ||
   "1.0.0";
-
-// ── Retry state per request ─────────────────────────────────────────────────
-// Stored on the request config so interceptors can track attempt counts.
 
 interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
   _retryCount?: number;
   _requestId?: string;
   _startTime?: number;
 }
-
-// ── Create Axios instance ───────────────────────────────────────────────────
 
 const api = axios.create({
   baseURL: "/api",
@@ -53,9 +37,6 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
-
-// ── Request interceptor ─────────────────────────────────────────────────────
-// Attaches tracing headers to every outgoing request.
 
 api.interceptors.request.use((config: ExtendedAxiosRequestConfig) => {
   const requestId = generateUUID();
@@ -67,7 +48,6 @@ api.interceptors.request.use((config: ExtendedAxiosRequestConfig) => {
   config.headers.set("X-Client-Version", CLIENT_VERSION);
   config.headers.set("X-Timestamp", new Date().toISOString());
 
-  // Dev logging
   if (process.env.NODE_ENV === "development") {
     console.debug(
       `[API] ▶ ${config.method?.toUpperCase()} ${config.url} [${requestId.slice(0, 8)}]`,
@@ -77,12 +57,7 @@ api.interceptors.request.use((config: ExtendedAxiosRequestConfig) => {
   return config;
 });
 
-// ── Response interceptor ────────────────────────────────────────────────────
-// Unwraps the ApiResponse<T> envelope on success.
-// Converts ApiFailureResponse into a thrown AppError on failure.
-
 api.interceptors.response.use(
-  // ── Success path ─────────────────────────────────────────────────────────
   (response) => {
     const config = response.config as ExtendedAxiosRequestConfig;
     const duration = Date.now() - (config._startTime ?? Date.now());
@@ -95,7 +70,6 @@ api.interceptors.response.use(
       );
     }
 
-    // Unwrap ApiSuccessResponse envelope if present
     const body = response.data as ApiSuccessResponse<unknown> | unknown;
     if (
       body &&
@@ -103,14 +77,12 @@ api.interceptors.response.use(
       "success" in body &&
       (body as ApiSuccessResponse<unknown>).success === true
     ) {
-      // Return the .data field directly so callers get T, not ApiSuccessResponse<T>
       response.data = (body as ApiSuccessResponse<unknown>).data;
     }
 
     return response;
   },
 
-  // ── Error path ───────────────────────────────────────────────────────────
   async (error: AxiosError) => {
     const config = error.config as ExtendedAxiosRequestConfig | undefined;
     const duration = config ? Date.now() - (config._startTime ?? Date.now()) : 0;
@@ -125,7 +97,6 @@ api.interceptors.response.use(
       );
     }
 
-    // ── Retry logic ─────────────────────────────────────────────────────────
     if (config && shouldRetry(error, retryCount, DEFAULT_RETRY_CONFIG)) {
       config._retryCount = retryCount + 1;
       const delay = calcRetryDelay(config._retryCount, DEFAULT_RETRY_CONFIG);
@@ -141,7 +112,6 @@ api.interceptors.response.use(
       return api.request(config);
     }
 
-    // ── Map ApiFailureResponse → AppError ───────────────────────────────────
     const responseData = error.response?.data as ApiFailureResponse | undefined;
     const httpStatus = error.response?.status;
 
@@ -152,7 +122,6 @@ api.interceptors.response.use(
       responseData.success === false &&
       responseData.error
     ) {
-      // Well-formed ApiFailureResponse — use its structured error
       throw new AppError(
         responseData.error,
         responseData.requestId ?? requestId,
@@ -160,7 +129,6 @@ api.interceptors.response.use(
       );
     }
 
-    // ── Network or unstructured error ───────────────────────────────────────
     if (axios.isCancel(error)) {
       throw new AppError(
         {
@@ -193,7 +161,6 @@ api.interceptors.response.use(
       );
     }
 
-    // Generic HTTP error (non-structured response)
     throw new AppError(
       {
         code: `HTTP_${httpStatus}`,
@@ -212,12 +179,6 @@ api.interceptors.response.use(
 
 export default api;
 
-// ── Abort controller factory ────────────────────────────────────────────────
-
-/**
- * Create an AbortController + signal pair for cancellable requests.
- * Pass the signal to Axios config: `api.get(url, { signal })`
- */
 export function createAbortController() {
   const controller = new AbortController();
   return { controller, signal: controller.signal };

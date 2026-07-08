@@ -1,4 +1,3 @@
-// components/dashboard/SentimentBadge.tsx
 import { cn } from "@/lib/utils";
 
 type Sentiment = "POSITIVE" | "NEUTRAL" | "NEGATIVE";

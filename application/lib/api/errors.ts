@@ -1,5 +1,3 @@
-// lib/api/errors.ts
-
 export interface ApiError {
 	code: string;
 	message: string;
@@ -71,11 +69,6 @@ export const ApiErrors = {
 	}),
 };
 
-/**
- * Safely extracts a human-readable message from any thrown value.
- * Handles: Error instances, objects with a `message` property (e.g. SDK errors),
- * and falls back to String() only as a last resort to avoid "[object Object]".
- */
 function extractMessage(err: unknown): string {
 	if (err instanceof Error) return err.message.slice(0, 300);
 	if (
@@ -92,8 +85,6 @@ function extractMessage(err: unknown): string {
 export function classifyError(err: unknown): ApiError {
 	const msg = extractMessage(err);
 
-	// auth.ts throws Error("Unauthorized") with .code = "UNAUTHORIZED" set on the object.
-	// Must be checked first so routes correctly return 401, not 500.
 	const code =
 		err !== null && typeof err === "object" && "code" in err
 			? (err as Record<string, unknown>).code

@@ -1,4 +1,3 @@
-// components/dashboard/AnalysisLiveView.tsx
 "use client";
 
 import { useCallback, useState } from "react";
@@ -29,8 +28,6 @@ interface Props {
 	initialPageCount?: number;
 	initialPersonaCount?: number;
 }
-
-// ── Status copy ─────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<
 	string,
@@ -64,13 +61,10 @@ const STATUS_META: Record<
 	},
 };
 
-// ── Elapsed timer ────────────────────────────────────────────────────────────
-
 function useElapsedSeconds(active: boolean) {
 	const [start] = useState(() => Date.now());
 	const [, setTick] = useState(0);
 
-	// Re-render every second when active
 	if (typeof window !== "undefined" && active) {
 		setTimeout(() => setTick((t) => t + 1), 1000);
 	}
@@ -83,8 +77,6 @@ function formatElapsed(seconds: number): string {
 	const s = seconds % 60;
 	return `${m}m ${s.toString().padStart(2, "0")}s`;
 }
-
-// ── Component ────────────────────────────────────────────────────────────────
 
 export function AnalysisLiveView({
 	analysisId,
@@ -120,7 +112,6 @@ export function AnalysisLiveView({
 
 	const handleFailed = useCallback((reason: string | null) => {
 		setFailureReason(reason);
-		// Reload after a delay so the server-rendered FAILED state takes over
 		setTimeout(() => window.location.reload(), 3000);
 	}, []);
 
@@ -188,7 +179,6 @@ export function AnalysisLiveView({
 
 	return (
 		<div className="space-y-4">
-			{/* ── Offline banner ── */}
 			{isOffline && (
 				<div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3">
 					<WifiOff className="h-4 w-4 text-amber-500 shrink-0" />
@@ -199,7 +189,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* ── Failure state ── */}
 			{isFailed && (
 				<div className="rounded-2xl border border-destructive/25 bg-destructive/5 p-5 space-y-3">
 					<div className="flex items-start gap-3">
@@ -242,11 +231,9 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* ── Status header ── */}
 			{!isFailed && (
 				<div className="flex items-start justify-between gap-4">
 					<div className="flex items-center gap-3">
-						{/* Animated indicator */}
 						<div
 							className={cn(
 								"h-2.5 w-2.5 rounded-full shrink-0 mt-0.5",
@@ -267,7 +254,6 @@ export function AnalysisLiveView({
 						</div>
 					</div>
 
-					{/* Elapsed time + cancel */}
 					<div className="flex items-center gap-2 shrink-0">
 						{isRunning && elapsed > 0 && (
 							<div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -289,7 +275,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* Cancel error */}
 			{cancelError && (
 				<div className="flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-2.5">
 					<AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
@@ -297,7 +282,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* Transient poll error */}
 			{lastError && !isOffline && (
 				<div className="flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-2">
 					<XCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -307,10 +291,8 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* ── Live stats ── */}
 			{!isFailed && (
 				<div className="grid grid-cols-2 gap-3">
-					{/* Pages */}
 					<div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
 						<div className="h-8 w-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
 							<FileText className="h-4 w-4 text-muted-foreground" />
@@ -323,7 +305,6 @@ export function AnalysisLiveView({
 						</div>
 					</div>
 
-					{/* Personas */}
 					<div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3">
 						<div className="h-8 w-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
 							<Users className="h-4 w-4 text-muted-foreground" />
@@ -340,7 +321,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* ── Pipeline terminal (hide when failed) ── */}
 			{!isFailed && (
 				<AnalysisPipeline
 					status={status}
@@ -349,7 +329,6 @@ export function AnalysisLiveView({
 				/>
 			)}
 
-			{/* ── What's happening explanation (ANALYZING) ── */}
 			{status === "ANALYZING" && (
 				<div className="rounded-xl border border-(--pf-accent)/15 bg-(--pf-accent)/5 px-4 py-3">
 					<p className="text-xs text-muted-foreground leading-relaxed">
@@ -363,7 +342,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* ── ETA hint (PENDING) ── */}
 			{status === "PENDING" && (
 				<div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
 					<p className="text-xs text-muted-foreground">
@@ -374,7 +352,6 @@ export function AnalysisLiveView({
 				</div>
 			)}
 
-			{/* Dev Debug Panel — development only */}
 			<DevDebugPanel pollingState={pollingState} analysisId={analysisId} />
 		</div>
 	);

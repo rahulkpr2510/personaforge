@@ -1,4 +1,3 @@
-// app/(dashboard)/admin/personas/page.tsx
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";

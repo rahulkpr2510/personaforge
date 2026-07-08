@@ -1,4 +1,3 @@
-// components/dashboard/StatCard.tsx
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";

@@ -1,20 +1,3 @@
-// hooks/useAnalysisStatus.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Adaptive polling hook for analysis live-view.
-// Replaces the hardcoded 2.5s setInterval in AnalysisLiveView.tsx.
-//
-// Polling strategy:
-//   0–60s    → 2.5s interval  (fast, active phase)
-//   60–300s  → 5s interval    (medium, still watching)
-//   300s+    → 10s interval   (slow, background monitoring)
-//
-// Extras:
-//   - Pauses when tab is hidden, resumes on focus
-//   - Detects offline/online state
-//   - Cancels in-flight request on unmount (no orphan requests)
-//   - Stops automatically on COMPLETED or FAILED
-// ─────────────────────────────────────────────────────────────────────────────
-
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,22 +10,18 @@ import { AnalysisApi } from "@/lib/api/analyses";
 import type { CrawlerEvent, CrawlMeta } from "@/lib/api/types";
 import { AppError } from "@/lib/api/types";
 
-// ── Adaptive polling intervals (ms) ────────────────────────────────────────
-
 const FAST_INTERVAL = 2_500;
 const MEDIUM_INTERVAL = 5_000;
 const SLOW_INTERVAL = 10_000;
 
-const FAST_THRESHOLD = 60_000;   // Switch to medium after 60s
-const SLOW_THRESHOLD = 300_000;  // Switch to slow after 5 minutes
+const FAST_THRESHOLD = 60_000;
+const SLOW_THRESHOLD = 300_000;
 
 function getInterval(elapsedMs: number): number {
   if (elapsedMs < FAST_THRESHOLD) return FAST_INTERVAL;
   if (elapsedMs < SLOW_THRESHOLD) return MEDIUM_INTERVAL;
   return SLOW_INTERVAL;
 }
-
-// ── Hook return type ────────────────────────────────────────────────────────
 
 export interface AnalysisStatusState {
   status: AnalysisStatus;
@@ -52,15 +31,10 @@ export interface AnalysisStatusState {
   focusGroup: FocusGroupInsight | null;
   pageCount: number;
   personaCount: number;
-  /** True when the browser has no network connection */
   isOffline: boolean;
-  /** Last AppError from a failed poll (cleared on next successful poll) */
   lastError: AppError | null;
-  /** Current polling interval in ms (useful for DevDebugPanel) */
   currentInterval: number;
-  /** Total number of polls performed */
   pollCount: number;
-  /** Number of failed polls in a row */
   consecutiveFailures: number;
 }
 
@@ -69,16 +43,12 @@ export interface UseAnalysisStatusOptions {
   initialStatus?: AnalysisStatus;
   initialPageCount?: number;
   initialPersonaCount?: number;
-  /** Called when status transitions to COMPLETED */
   onCompleted?: (data: {
     personas: AnalysisPersona[];
     focusGroup: FocusGroupInsight | null;
   }) => void;
-  /** Called when status transitions to FAILED */
   onFailed?: (error: string | null) => void;
 }
-
-// ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useAnalysisStatus({
   analysisId,
@@ -151,7 +121,6 @@ export function useAnalysisStatus({
         };
       });
 
-      // Terminal states — stop polling
       if (data.status === "COMPLETED") {
         polling.active = false;
         onCompleted?.({
@@ -167,7 +136,6 @@ export function useAnalysisStatus({
         return;
       }
     } catch (err) {
-      // Ignore cancellations (expected on unmount / rapid re-renders)
       if (err instanceof AppError && err.code === "REQUEST_CANCELLED") return;
 
       setState((prev) => ({
@@ -182,7 +150,6 @@ export function useAnalysisStatus({
       }
     }
 
-    // Schedule next poll
     if (polling.active) {
       const elapsed = Date.now() - polling.startTime;
       const interval = getInterval(elapsed);
@@ -191,17 +158,13 @@ export function useAnalysisStatus({
     }
   }, [analysisId, onCompleted, onFailed]);
 
-  // ── Start / stop polling ────────────────────────────────────────────────
-
   useEffect(() => {
-    // Don't poll for terminal statuses
     if (initialStatus === "COMPLETED" || initialStatus === "FAILED") return;
 
     const polling = pollingRef.current;
     polling.active = true;
     polling.startTime = Date.now();
 
-    // Start immediately
     poll();
 
     return () => {
@@ -211,19 +174,15 @@ export function useAnalysisStatus({
     };
   }, [analysisId, initialStatus, poll]);
 
-  // ── Visibility change — pause / resume ─────────────────────────────────
-
   useEffect(() => {
     const handleVisibilityChange = () => {
       const polling = pollingRef.current;
       if (!polling.active) return;
 
       if (document.visibilityState === "visible") {
-        // Resume — poll immediately then continue
         clearTimeout(polling.timeoutId);
         poll();
       } else {
-        // Pause — cancel in-flight request
         abortControllerRef.current?.abort();
         clearTimeout(polling.timeoutId);
       }
@@ -233,8 +192,6 @@ export function useAnalysisStatus({
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [poll]);
 
-  // ── Offline / online detection ─────────────────────────────────────────
-
   useEffect(() => {
     const handleOffline = () => {
       setState((prev) => ({ ...prev, isOffline: true }));
@@ -243,7 +200,6 @@ export function useAnalysisStatus({
 
     const handleOnline = () => {
       setState((prev) => ({ ...prev, isOffline: false }));
-      // Resume polling immediately on reconnect
       if (pollingRef.current.active) {
         clearTimeout(pollingRef.current.timeoutId);
         poll();

@@ -1,7 +1,3 @@
-// lib/services/website-intelligence.ts
-// Phase 9: Generates ONE master WebsiteIntelligence object from crawl data.
-// Every downstream AI process consumes this object.
-// Crawling and parsing NEVER repeat.
 
 import type { VisionAnalysis } from "../types";
 
@@ -22,12 +18,10 @@ export interface PageEvidence {
 }
 
 export interface WebsiteIntelligence {
-	// Identity
 	url: string;
 	hostname: string;
 	deviceType: string;
 
-	// Structure
 	pageCount: number;
 	maxDepth: number;
 	pageTypes: string[];
@@ -35,19 +29,16 @@ export interface WebsiteIntelligence {
 	uniqueCtaLabels: string[];
 	primaryActionLabels: string[];
 
-	// Content
 	totalWords: number;
 	avgWordCount: number;
 	contentSample: string;
 
-	// Interaction
 	totalButtons: number;
 	totalForms: number;
 	totalLinks: number;
 	totalInputs: number;
 	totalInteractions: number;
 
-	// Accessibility
 	totalImagesWithoutAlt: number;
 	totalImages: number;
 	totalInputsWithoutLabel: number;
@@ -56,23 +47,17 @@ export interface WebsiteIntelligence {
 	pagesWithoutH1: number;
 	avgLandmarkCount: number;
 
-	// Performance
 	avgTtfbMs: number | null;
 	avgLoadMs: number | null;
 	slowPages: string[];
 
-	// Trust signals
 	hasPricingPage: boolean;
 	hasContactPage: boolean;
 	hasDocsPage: boolean;
 
-	// Vision summaries (pre-compiled — not raw screenshots)
 	visionSummaries: string[];
-
-	// Per-page detail for prompts
 	pageEvidence: PageEvidence[];
 
-	// Crawl coverage
 	crawlCoverage: {
 		pagesCrawled: number;
 		pagesDiscovered: number;

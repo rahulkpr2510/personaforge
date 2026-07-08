@@ -1,4 +1,3 @@
-// app/api/personas/[id]/route.ts
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Limits } from "@/lib/rate-limit";

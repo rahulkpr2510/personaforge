@@ -1,4 +1,3 @@
-// components/dashboard/EmptyState.tsx
 "use client";
 import { motion } from "motion/react";
 import { Icon, type IconName } from "@/components/dashboard/Icon";

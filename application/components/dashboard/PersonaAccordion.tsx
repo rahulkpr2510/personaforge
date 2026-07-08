@@ -1,4 +1,3 @@
-// components/dashboard/PersonaAccordion.tsx
 "use client";
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";

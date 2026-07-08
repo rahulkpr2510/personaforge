@@ -1,4 +1,3 @@
-// components/dashboard/StatusBadge.tsx
 import { cn } from "@/lib/utils";
 
 type Status = "PENDING" | "CRAWLING" | "ANALYZING" | "COMPLETED" | "FAILED";

@@ -1,6 +1,3 @@
-// lib/services/focus-group-service.ts
-// Phase 1: Clean FocusGroupService — single responsibility.
-// The rest of the application calls runFocusGroup() from here only.
 
 import Groq from "groq-sdk";
 import { getAIConfig } from "../config/ai-providers";

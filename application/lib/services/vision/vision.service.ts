@@ -1,6 +1,4 @@
-// lib/services/vision/vision.service.ts
-// The ONLY entry point for vision analysis in the entire application.
-// No other file should ever import @google/generative-ai or call OpenRouter for vision.
+// Entrypoint for screenshot analysis with cache, retry, and secondary fallbacks.
 
 import { getAIConfig } from "../../config/ai-providers";
 import { GeminiVisionProvider } from "./providers/gemini.provider";
@@ -21,13 +19,9 @@ const VISION_PROMPT = `You are a senior UX analyst. Analyze this webpage screens
 }
 Be specific and evidence-based. Return only valid JSON.`;
 
-// In-process LRU-style cache keyed by CDN URL.
-// NOTE: This cache is ephemeral — it lives only for the current warm serverless
-// instance. Cold starts and scaled-out instances each begin with an empty cache,
-// so the same screenshot may be analysed multiple times across instances.
-// The primary purpose is deduplication *within* a single analysis run.
+// Ephemeral map to cache results within the same analysis request and avoid duplicate LLM bills
 const cache = new Map<string, VisionCacheEntry>();
-const CACHE_TTL_MS = 60 * 60 * 1_000; // 1 hour (per warm instance)
+const CACHE_TTL_MS = 60 * 60 * 1_000;
 
 function getFromCache(url: string): VisionAnalysis | null {
 	const entry = cache.get(url);
@@ -41,7 +35,6 @@ function getFromCache(url: string): VisionAnalysis | null {
 
 function setInCache(url: string, result: VisionAnalysis): void {
 	if (cache.size > 500) {
-		// Evict oldest entry
 		const firstKey = cache.keys().next().value;
 		if (firstKey) cache.delete(firstKey);
 	}
@@ -52,15 +45,9 @@ async function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-// Valid literal values for VisionAnalysis union fields.
 const VALID_VISUAL_COMPLEXITY = ["low", "medium", "high"] as const;
 const VALID_FORM_COMPLEXITY = ["simple", "moderate", "complex"] as const;
 
-/**
- * Clamps a raw value to the nearest valid union literal.
- * If the model returns an unrecognised string (e.g. "Very High"), we fall back
- * to the supplied default rather than letting an invalid value through.
- */
 function clampLiteral<T extends string>(
 	val: unknown,
 	valid: readonly T[],
@@ -72,10 +59,6 @@ function clampLiteral<T extends string>(
 		: fallback;
 }
 
-/**
- * Normalises the raw LLM output to guarantee it satisfies the VisionAnalysis
- * type contract — specifically the union-typed complexity fields.
- */
 function normaliseVisionResult(raw: VisionAnalysis): VisionAnalysis {
 	return {
 		...raw,
@@ -180,18 +163,10 @@ function buildProviders(): {
 	return { primary: make(primaryCfg), fallback: make(fallbackCfg) };
 }
 
-/**
- * Analyzes a single screenshot URL.
- * - Checks in-memory cache first (never analyzes same URL twice).
- * - Tries primary provider with retries + exponential backoff.
- * - Falls back to secondary provider on failure.
- * - Returns null (never throws) so callers can gracefully skip vision.
- */
 export async function analyzeScreenshot(
 	screenshotUrl: string,
 	pageTitle: string,
 ): Promise<VisionAnalysis | null> {
-	// Cache hit
 	const cached = getFromCache(screenshotUrl);
 	if (cached) {
 		console.log(`[VisionService] Cache hit for ${screenshotUrl}`);
@@ -217,7 +192,6 @@ export async function analyzeScreenshot(
 		return null;
 	}
 
-	// Try primary provider
 	if (primary) {
 		try {
 			const result = await callWithRetry(
@@ -241,7 +215,6 @@ export async function analyzeScreenshot(
 		}
 	}
 
-	// Try fallback provider
 	if (fallback) {
 		const fallbackCfgEntry = cfg.vision.providers[cfg.vision.fallback!];
 		try {
@@ -272,10 +245,6 @@ export async function analyzeScreenshot(
 	return null;
 }
 
-/**
- * Determines whether a page warrants vision analysis based on its type.
- * Expensive vision should only run on high-value pages.
- */
 export function shouldRunVision(
 	pageType: string,
 	hasScreenshot: boolean,
@@ -286,9 +255,6 @@ export function shouldRunVision(
 	return cfg.vision_optimization.priorityPageTypes.includes(normalized);
 }
 
-/**
- * Returns the maximum number of pages that should receive vision analysis.
- */
 export function getMaxVisionPages(): number {
 	return getAIConfig().vision_optimization.maxVisionPages;
 }

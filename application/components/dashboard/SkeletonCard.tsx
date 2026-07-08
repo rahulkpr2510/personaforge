@@ -1,4 +1,3 @@
-// components/dashboard/SkeletonCard.tsx
 import { cn } from "@/lib/utils";
 
 export function SkeletonCard({ className }: { className?: string }) {

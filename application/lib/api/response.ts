@@ -1,14 +1,9 @@
-// lib/api/response.ts
 import { NextResponse } from "next/server";
 
 export function getRequestId(req: Request): string {
 	return req.headers.get("x-request-id") ?? crypto.randomUUID();
 }
 
-/**
- * Headers that prevent any caching — used on polling endpoints like /status
- * where stale responses would show incorrect analysis state to the client.
- */
 export const NO_CACHE_HEADERS: Record<string, string> = {
 	"Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
 	Pragma: "no-cache",
@@ -18,7 +13,6 @@ export const NO_CACHE_HEADERS: Record<string, string> = {
 export function apiSuccess<T>(
 	requestId: string,
 	data: T,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- overload compat: callers pass undefined before status
 	_unused?: any,
 	status = 200,
 	headers?: Record<string, string>,

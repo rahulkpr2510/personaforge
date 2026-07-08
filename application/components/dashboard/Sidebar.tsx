@@ -1,4 +1,3 @@
-// components/dashboard/Sidebar.tsx
 "use client";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";

@@ -1,4 +1,3 @@
-// components/dashboard/PersonaCard.tsx
 "use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";

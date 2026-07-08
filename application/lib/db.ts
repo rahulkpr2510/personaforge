@@ -3,7 +3,6 @@ import { neonConfig } from "@neondatabase/serverless";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import ws from "ws";
 
-// Next.js needs this to use the neon serverless driver over WebSocket
 neonConfig.webSocketConstructor = ws;
 
 const connectionString = `${process.env.DATABASE_URL}`;
@@ -13,7 +12,7 @@ const globalForPrisma = globalThis as unknown as {
 	prismaVersion: number | undefined;
 };
 
-// Increment schema version whenever Prisma schema changes so hot-reload recreates the client
+// Bump when Prisma schema changes to force client recreation on hot-reload.
 const SCHEMA_VERSION = 2;
 
 if (
@@ -31,7 +30,5 @@ export const db =
 		log: ["error"],
 	});
 
-// Persist the singleton across hot-reloads in dev AND across requests in
-// production serverless (warm instances reuse the same client).
 globalForPrisma.prisma = db;
 globalForPrisma.prismaVersion = SCHEMA_VERSION;

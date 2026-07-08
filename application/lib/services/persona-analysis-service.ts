@@ -1,7 +1,4 @@
-// lib/services/persona-analysis-service.ts
-// Phase 1 + 2: Sequential persona evaluation pipeline with rate-limit handling.
-// REPLACES runParallelEvaluations from persona-engine.ts.
-// The rest of the app should ONLY call this service — never Groq/OpenRouter directly.
+// Sequential evaluation of user personas to prevent rate limits.
 
 import Groq from "groq-sdk";
 import { getAIConfig } from "../config/ai-providers";
@@ -15,8 +12,6 @@ import type {
 	UxCategoryScores,
 } from "../types";
 
-// Re-export the prompt builder and vocabulary from the existing persona-engine
-// so we don't duplicate that massive prompt logic.
 import { buildPersonaPrompt } from "./persona-engine-internals";
 
 const FALLBACK_EVALUATION: PersonaEvaluation = {
@@ -36,7 +31,6 @@ async function sleep(ms: number): Promise<void> {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-// ── Parsing & Validation (identical to persona-engine.ts) ─────────────────────
 function parseAndValidate(raw: string, pageCount: number): PersonaEvaluation {
 	let cleaned = raw.trim();
 	if (cleaned.startsWith("```json"))
@@ -221,7 +215,6 @@ async function evaluateSinglePersona(
 	const pageCount = (siteContext as SiteContext).pageCount ?? 1;
 	const prompt = buildPersonaPrompt(persona, siteContext as SiteContext);
 
-	// ── Primary provider (Groq) with exponential backoff ──────────────────────
 	for (let i = 0; i <= primaryCfg.maxRetries; i++) {
 		try {
 			const raw = await callGroq(
@@ -263,7 +256,6 @@ async function evaluateSinglePersona(
 		}
 	}
 
-	// ── Fallback provider (OpenRouter) ────────────────────────────────────────
 	if (fallbackCfg && process.env.OPENROUTER_API_KEY) {
 		for (let i = 0; i <= fallbackCfg.maxRetries; i++) {
 			try {
@@ -314,12 +306,6 @@ export interface PersonaProgress {
 	failed: string[];
 }
 
-/**
- * Runs persona evaluations SEQUENTIALLY with configurable delay between each.
- * - Retries only the failed persona (not the whole pipeline).
- * - Reports progress via optional callback.
- * - Handles 429 rate limit by increasing delay automatically.
- */
 export async function runSequentialEvaluations(
 	personas: PersonaContext[],
 	siteContext: SiteContext | Record<string, unknown>,
@@ -363,7 +349,6 @@ export async function runSequentialEvaluations(
 			progress.failed.push(persona.label);
 		}
 
-		// Inter-persona delay (skip after last persona)
 		if (i < personas.length - 1) {
 			await sleep(cfg.pipeline.personaDelayMs);
 		}

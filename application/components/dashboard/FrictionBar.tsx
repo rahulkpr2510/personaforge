@@ -1,4 +1,3 @@
-// components/dashboard/FrictionBar.tsx
 "use client";
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";

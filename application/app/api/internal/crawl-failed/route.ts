@@ -1,4 +1,3 @@
-// app/api/internal/crawl-failed/route.ts
 import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/lib/db";

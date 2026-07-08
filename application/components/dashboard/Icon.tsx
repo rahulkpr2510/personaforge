@@ -1,4 +1,3 @@
-// components/dashboard/Icon.tsx
 import {
 	LayoutDashboard,
 	FlaskConical,

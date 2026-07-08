@@ -1,4 +1,3 @@
-// components/dashboard/ErrorCard.tsx
 "use client";
 
 import { useState } from "react";
@@ -16,11 +15,8 @@ import { AppError, ErrorCategory } from "@/lib/api/types";
 
 interface ErrorCardProps {
 	error: AppError | Error | string | null;
-	/** Title override — defaults to error.title or "Something went wrong" */
 	title?: string;
-	/** Called when the user clicks Retry */
 	onRetry?: () => void;
-	/** Called when the user clicks the back link */
 	onBack?: () => void;
 	backLabel?: string;
 	className?: string;
@@ -62,7 +58,6 @@ export function ErrorCard({
 }: ErrorCardProps) {
 	const [showDetails, setShowDetails] = useState(false);
 
-	// Normalize to display values
 	let displayTitle = title ?? "Something went wrong";
 	let displayMessage = "An unexpected error occurred. Please try again.";
 	let displaySuggestion: string | null = null;
@@ -74,7 +69,6 @@ export function ErrorCard({
 	let fieldErrors: Record<string, string[]> | undefined;
 
 	if (error instanceof AppError) {
-		// AppError.message is set to the user-friendly message in the constructor
 		displayTitle = title ?? error.title;
 		displayMessage = error.userMessage;
 		displaySuggestion = error.suggestedAction;

@@ -1,4 +1,3 @@
-// app/api/analyses/route.ts
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CreateAnalysisSchema } from "@/lib/validation/schemas";

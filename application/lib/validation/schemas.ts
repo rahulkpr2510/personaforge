@@ -1,10 +1,9 @@
 import { z } from "zod";
 
-/** Strip HTML tags and control characters from all free-text fields */
 function sanitizeText(val: string): string {
   return val
-    .replace(/<[^>]*>/g, "") // strip HTML tags → XSS prevention
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // strip control chars
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
     .trim();
 }
 
@@ -18,11 +17,6 @@ const SafeText = (min: number, max: number) =>
       message: `Must be at least ${min} characters after sanitization`,
     });
 
-/**
- * URL validator with full SSRF protection.
- * Blocks: localhost, 127.x, RFC-1918 private ranges, .local mDNS,
- * cloud metadata endpoints, and all non-HTTP/HTTPS protocols.
- */
 const SafeUrl = z
   .string()
   .url("Must be a valid URL")

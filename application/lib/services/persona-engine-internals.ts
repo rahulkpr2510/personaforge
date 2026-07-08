@@ -1,6 +1,3 @@
-// lib/services/persona-engine-internals.ts
-// Extracted prompt builder — shared between persona-engine.ts and persona-analysis-service.ts.
-// This is a pure function: no side effects, no I/O.
 
 import type { PersonaContext, SiteContext } from "../types";
 

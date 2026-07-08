@@ -1,6 +1,4 @@
-// lib/config/ai-providers.ts
-// Central configuration for all AI providers.
-// Switching providers requires ONLY changes here — never in business logic.
+// Centralized config for AI provider models, retries, and optimization thresholds.
 
 export type VisionProviderName = "gemini" | "openrouter";
 export type TextProviderName = "groq" | "openrouter";
@@ -37,15 +35,13 @@ export interface AIProviderConfig {
 		providers: Record<TextProviderName, TextProviderConfig>;
 	};
 	pipeline: {
-		personaDelayMs: number; // delay between sequential persona calls
-		retryBaseDelayMs: number; // base for exponential backoff
-		retryMaxDelayMs: number; // cap on exponential backoff
-		rateLimitDelayMs: number; // delay added when 429 is received
+		personaDelayMs: number; // Spacer between consecutive persona LLM calls
+		retryBaseDelayMs: number;
+		retryMaxDelayMs: number;
+		rateLimitDelayMs: number;
 	};
 	vision_optimization: {
-		// Page types that warrant expensive vision analysis
 		priorityPageTypes: string[];
-		// Max number of pages to run vision on per analysis
 		maxVisionPages: number;
 	};
 }

@@ -1,4 +1,3 @@
-// app/api/analyses/[id]/route.ts
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getRequestId, apiSuccess, apiFailure } from "@/lib/api/response";

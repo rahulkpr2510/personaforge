@@ -1,4 +1,3 @@
-// lib/crawl-log-messages.ts
 
 export interface CrawlEvent {
 	type: string;

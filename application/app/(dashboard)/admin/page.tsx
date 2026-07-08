@@ -1,4 +1,3 @@
-// app/(dashboard)/admin/page.tsx
 import { requireAuth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";

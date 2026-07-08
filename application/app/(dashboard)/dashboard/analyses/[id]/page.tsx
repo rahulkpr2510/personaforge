@@ -1,4 +1,3 @@
-// app/(dashboard)/dashboard/analyses/[id]/page.tsx
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";

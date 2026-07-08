@@ -1,7 +1,3 @@
-/**
- * Quality Gate — validates AI-generated persona evaluations before saving.
- * Prevents hallucinated, contradictory, or coverage-ignoring reports.
- */
 
 import type {
   PersonaEvaluationWithLabel,
@@ -14,10 +10,8 @@ export interface QualityGateResult {
   passed: boolean;
   failures: string[];
   warnings: string[];
-  score: number; // 0–100 — quality score
+  score: number;
 }
-
-// ─── Scoped Language Checker ─────────────────────────────────────────────────
 
 const ABSOLUTE_ABSENCE_PATTERNS = [
   /\bthere is no\b/i,

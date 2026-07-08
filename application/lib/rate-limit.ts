@@ -1,12 +1,3 @@
-/**
- * In-process sliding window rate limiter.
- *
- * Limits are per-process. On Vercel Serverless, each function instance has its
- * own process — limits are not shared across instances. This is sufficient to
- * prevent single-client billing abuse. For fully distributed limits across all
- * Vercel instances, replace the Map store with @upstash/ratelimit + Redis.
- */
-
 interface RateLimitEntry {
   count: number;
   windowStart: number;
@@ -14,7 +5,6 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Purge stale entries every 5 minutes — prevents unbounded Map growth
 setInterval(
   () => {
     const now = Date.now();
@@ -28,15 +18,15 @@ setInterval(
 );
 
 export interface RateLimitOptions {
-  key: string; // Unique key — e.g. `userId:endpoint`
-  limit: number; // Max requests per window
-  windowMs: number; // Window duration in ms
+  key: string;
+  limit: number;
+  windowMs: number;
 }
 
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
-  resetAt: number; // Unix timestamp ms
+  resetAt: number;
 }
 
 function checkRateLimit({
@@ -68,12 +58,6 @@ function checkRateLimit({
   };
 }
 
-/**
- * Pre-configured limits per endpoint category.
- * Analysis creation triggers Playwright + 5 AI model calls — keep tight.
- * Persona CRUD is DB-only — more relaxed.
- * Internal pipeline: keyed by analysisId, not userId.
- */
 export const Limits = {
   createAnalysis: (userId: string) =>
     checkRateLimit({

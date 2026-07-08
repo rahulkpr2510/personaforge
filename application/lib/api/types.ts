@@ -1,11 +1,3 @@
-// lib/api/types.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared API types used by BOTH frontend (Axios client) and backend (route handlers).
-// Never import anything from Next.js / Node-only modules here.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ── Error classification ───────────────────────────────────────────────────
-
 export enum ErrorCategory {
   VALIDATION = "VALIDATION",
   NETWORK = "NETWORK",
@@ -21,34 +13,20 @@ export enum ErrorCategory {
   UNKNOWN = "UNKNOWN",
 }
 
-// ── Structured API error ───────────────────────────────────────────────────
-
 export interface ApiErrorDetail {
-  /** Machine-readable code — e.g. "ANALYSIS_NOT_FOUND" */
   code: string;
-  /** Error category for routing to the right handler */
   category: ErrorCategory;
-  /** Short, user-facing title — e.g. "Analysis not found" */
   title: string;
-  /** User-facing sentence explaining what happened */
   message: string;
-  /** Developer-facing explanation — never shown in production UI */
   technicalReason: string;
-  /** Actionable next step for the user */
   suggestedAction: string;
-  /** Whether the client can safely retry this request */
   retryable: boolean;
-  /** Seconds to wait before retrying (used for 429 responses) */
   retryAfter?: number;
-  /** Field-level validation errors */
   fieldErrors?: Record<string, string[]>;
 }
 
-// ── Response envelope ──────────────────────────────────────────────────────
-
 export interface ApiSuccessResponse<T> {
   success: true;
-  /** UUID that correlates this request through frontend → backend → logs */
   requestId: string;
   timestamp: string;
   data: T;
@@ -63,8 +41,6 @@ export interface ApiFailureResponse {
 }
 
 export type ApiResponse<T> = ApiSuccessResponse<T> | ApiFailureResponse;
-
-// ── Analysis API data shapes ───────────────────────────────────────────────
 
 export interface CreateAnalysisData {
   analysisId: string;
@@ -114,8 +90,6 @@ export interface CrawlMeta {
   partialReason?: string | null;
 }
 
-// ── Persona API data shapes ────────────────────────────────────────────────
-
 export interface PersonaData {
   id: string;
   label: string;
@@ -135,9 +109,6 @@ export interface ListPersonasData {
   prebuilt: PersonaData[];
   custom: PersonaData[];
 }
-
-// ── Client-side AppError ───────────────────────────────────────────────────
-// Thrown by the Axios response interceptor so callers receive structured errors.
 
 export class AppError extends Error {
   readonly requestId: string;
@@ -168,7 +139,6 @@ export class AppError extends Error {
     this.httpStatus = httpStatus;
   }
 
-  /** Is this an authentication failure? */
   get isAuthError() {
     return (
       this.category === ErrorCategory.AUTHENTICATION ||
@@ -177,12 +147,10 @@ export class AppError extends Error {
     );
   }
 
-  /** Is this a rate limit error? */
   get isRateLimitError() {
     return this.category === ErrorCategory.RATE_LIMIT || this.httpStatus === 429;
   }
 
-  /** Is this a validation error? */
   get isValidationError() {
     return this.category === ErrorCategory.VALIDATION || this.httpStatus === 400;
   }

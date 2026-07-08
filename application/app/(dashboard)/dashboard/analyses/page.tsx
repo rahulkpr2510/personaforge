@@ -1,4 +1,3 @@
-// app/(dashboard)/dashboard/analyses/page.tsx
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";

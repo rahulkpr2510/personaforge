@@ -13,7 +13,6 @@ import type {
   EvidenceLevel,
 } from "../types";
 
-// ─── UX Maturity ─────────────────────────────────────────────────────────────
 
 function uxMaturityLevel(
   score: number,
@@ -24,7 +23,6 @@ function uxMaturityLevel(
   return "Emerging";
 }
 
-// ─── String extraction helpers ───────────────────────────────────────────────
 
 function getString(v: StructuredPainPoint | string): string {
   return typeof v === "string" ? v : v.issue ?? "";
@@ -39,7 +37,6 @@ function getStringRec(v: StructuredRecommendation | string): string {
   return v.improvement ?? v.issue ?? "";
 }
 
-// ─── Deduplication ───────────────────────────────────────────────────────────
 
 function deduplicateItems(items: string[]): string[] {
   const seen = new Set<string>();
@@ -54,7 +51,6 @@ function deduplicateItems(items: string[]): string[] {
   return result;
 }
 
-// ─── Top Strengths ───────────────────────────────────────────────────────────
 
 function buildTopStrengths(
   evaluations: PersonaEvaluationWithLabel[],
@@ -116,7 +112,6 @@ function buildTopStrengths(
   }));
 }
 
-// ─── Top Risks ───────────────────────────────────────────────────────────────
 
 const SEVERITY_WEIGHT: Record<string, number> = {
   Critical: 4,
@@ -199,7 +194,6 @@ function buildBusinessImpact(severity: string, issue: string): string {
   return `${impactMap[severity] ?? impactMap.Medium} — related to: ${issue.slice(0, 80)}`;
 }
 
-// ─── Opportunity Matrix ───────────────────────────────────────────────────────
 
 function buildOpportunityMatrix(
   evaluations: PersonaEvaluationWithLabel[],
@@ -273,7 +267,6 @@ function buildOpportunityMatrix(
   });
 }
 
-// ─── Confidence Distribution ─────────────────────────────────────────────────
 
 function buildConfidenceDistribution(
   evaluations: PersonaEvaluationWithLabel[],
@@ -309,7 +302,6 @@ function buildConfidenceDistribution(
   };
 }
 
-// ─── Analysis Reliability ────────────────────────────────────────────────────
 
 function buildAnalysisReliability(
   evaluations: PersonaEvaluationWithLabel[],
@@ -367,7 +359,6 @@ function buildAnalysisReliability(
   return { score, evidenceBacked, measured, inferred, speculative, totalFindings: total, coverage: crawlCoverage, reliabilityNote };
 }
 
-// ─── Research Gaps ────────────────────────────────────────────────────────────
 
 function buildResearchGaps(
   evaluations: PersonaEvaluationWithLabel[],
@@ -408,7 +399,6 @@ function buildResearchGaps(
   return gaps.slice(0, 6);
 }
 
-// ─── Most Impactful Recommendation ───────────────────────────────────────────
 
 function findMostImpactfulRecommendation(matrix: OpportunityItem[]): string | undefined {
   const quickWins = matrix.filter(m => m.category === "quick-win");
@@ -418,7 +408,6 @@ function findMostImpactfulRecommendation(matrix: OpportunityItem[]): string | un
   return matrix[0]?.improvement;
 }
 
-// ─── Most Affected Persona ────────────────────────────────────────────────────
 
 function findMostAffectedPersona(
   evaluations: PersonaEvaluationWithLabel[],
@@ -437,7 +426,6 @@ function findMostAffectedPersona(
   return { label: top.label, name: top.name, frictionScore: top.frictionScore, adoptionLikelihood: top.adoptionLikelihood };
 }
 
-// ─── Technical Debt Indicator ────────────────────────────────────────────────
 
 function buildTechnicalDebtIndicator(
   evaluations: PersonaEvaluationWithLabel[],
@@ -465,7 +453,6 @@ function buildTechnicalDebtIndicator(
   return "Low";
 }
 
-// ─── Conversion Risk ─────────────────────────────────────────────────────────
 
 function buildConversionRisk(
   evaluations: PersonaEvaluationWithLabel[],
@@ -479,7 +466,6 @@ function buildConversionRisk(
   return Math.round((overallFriction * 0.6 + (100 - avgAdoption) * 0.4));
 }
 
-// ─── Accessibility Risk ───────────────────────────────────────────────────────
 
 function buildAccessibilityRisk(
   evaluations: PersonaEvaluationWithLabel[],
@@ -499,7 +485,6 @@ function buildAccessibilityRisk(
   return "Low";
 }
 
-// ─── Weighted UX Score ───────────────────────────────────────────────────────
 
 const CATEGORY_WEIGHTS: Record<string, number> = {
   navigation: 1.2,
@@ -556,7 +541,6 @@ function computeWeightedUxScore(
   return undefined;
 }
 
-// ─── Business Risk Summary ────────────────────────────────────────────────────
 
 function buildBusinessRisk(
   overallScore: number | undefined,
@@ -579,7 +563,6 @@ function buildBusinessRisk(
   return `MODERATE business risk: While UX score is ${score}/100, adoption likelihood of ${Math.round(avgAdoption)}% suggests room for improvement in meeting key persona needs. Priority recommendations above are expected to increase this by 10–20 points.`;
 }
 
-// ─── Main Aggregator ─────────────────────────────────────────────────────────
 
 export function aggregateInsights(
   evaluations: PersonaEvaluationWithLabel[],

@@ -1,5 +1,3 @@
-// components/dashboard/DevDebugPanel.tsx
-// Visible ONLY in development mode.
 "use client";
 
 import { useState } from "react";
@@ -15,7 +13,6 @@ interface DevDebugPanelProps {
 export function DevDebugPanel({ pollingState, analysisId }: DevDebugPanelProps) {
   const [open, setOpen] = useState(false);
 
-  // Only render in development
   if (process.env.NODE_ENV !== "development") return null;
 
   const {
@@ -51,7 +48,6 @@ export function DevDebugPanel({ pollingState, analysisId }: DevDebugPanelProps) 
 
   return (
     <div className="fixed bottom-4 right-4 z-50 w-72 rounded-xl border border-amber-500/40 bg-zinc-950/95 backdrop-blur shadow-2xl text-xs font-mono">
-      {/* Header */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-3 py-2 text-amber-400 hover:text-amber-300 transition-colors"
@@ -67,7 +63,6 @@ export function DevDebugPanel({ pollingState, analysisId }: DevDebugPanelProps) 
         )}
       </button>
 
-      {/* Content */}
       {open && (
         <div className="border-t border-zinc-800 px-3 py-2 space-y-1">
           {rows.map((row) => (
@@ -83,8 +78,6 @@ export function DevDebugPanel({ pollingState, analysisId }: DevDebugPanelProps) 
               </span>
             </div>
           ))}
-
-          {/* Polling speed indicator */}
           <div className="pt-1 border-t border-zinc-800 flex items-center gap-2">
             <span className="text-zinc-500">Speed</span>
             <div className="flex gap-1">

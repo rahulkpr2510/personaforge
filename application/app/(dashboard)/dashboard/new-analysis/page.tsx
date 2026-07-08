@@ -1,4 +1,3 @@
-// app/(dashboard)/dashboard/new-analysis/page.tsx
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PageHeader } from "@/components/dashboard/PageHeader";

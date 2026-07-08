@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -9,6 +8,8 @@ import { runFocusGroup } from "@/lib/services/focus-group";
 import { aggregateInsights } from "@/lib/services/aggregator";
 import { runQualityGate } from "@/lib/services/quality-gate";
 import { Limits } from "@/lib/rate-limit";
+import { getRequestId, apiSuccess, apiFailure } from "@/lib/api/response";
+import { ApiErrors, classifyError } from "@/lib/api/errors";
 import type {
   PersonaContext,
   PersonaEvaluationWithLabel,
@@ -86,6 +87,7 @@ const NewCrawlCompleteSchema = z.object({
 // ── Handler ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
+  const requestId = getRequestId(req);
   // Auth
   const headersList = await headers();
   const apiKey = headersList.get("x-internal-api-key");
@@ -94,13 +96,13 @@ export async function POST(req: Request) {
     !process.env.CRAWLER_INTERNAL_API_KEY ||
     apiKey !== process.env.CRAWLER_INTERNAL_API_KEY
   ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return apiFailure(requestId, ApiErrors.unauthorized(), 401);
   }
 
   // Parse + validate
   const raw = await req.json().catch(() => null);
   if (!raw) {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return apiFailure(requestId, ApiErrors.invalidJson(), 400);
   }
 
   const parsed = NewCrawlCompleteSchema.safeParse(raw);
@@ -109,9 +111,10 @@ export async function POST(req: Request) {
       "[crawl-complete] Payload validation failed:",
       parsed.error.flatten(),
     );
-    return NextResponse.json(
-      { error: "Invalid payload", details: parsed.error.flatten().fieldErrors },
-      { status: 400 },
+    return apiFailure(
+      requestId,
+      ApiErrors.validationFailed(parsed.error.flatten().fieldErrors as Record<string, string[]>),
+      400,
     );
   }
 
@@ -120,9 +123,10 @@ export async function POST(req: Request) {
   // Idempotency
   const rl = Limits.internalCrawlComplete(analysisId);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many retries for this analysis" },
-      { status: 429 },
+    return apiFailure(
+      requestId,
+      ApiErrors.rateLimitExceeded(rl.resetAt - Date.now()),
+      429,
     );
   }
 
@@ -132,17 +136,18 @@ export async function POST(req: Request) {
   });
 
   if (!analysis) {
-    return NextResponse.json({ error: "Analysis not found" }, { status: 404 });
+    return apiFailure(requestId, ApiErrors.analysisNotFound(), 404);
   }
 
   if (analysis.status === "COMPLETED" || analysis.status === "ANALYZING") {
-    return NextResponse.json({ skipped: true, reason: "Already processed" });
+    return apiSuccess(requestId, { skipped: true, reason: "Already processed" });
   }
 
   if (analysis.status === "FAILED") {
-    return NextResponse.json(
-      { error: "Analysis was already marked FAILED" },
-      { status: 409 },
+    return apiFailure(
+      requestId,
+      ApiErrors.cannotCancel(analysis.status),
+      409,
     );
   }
 
@@ -707,16 +712,22 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    return apiSuccess(requestId, { completed: true });
   } catch (err) {
     console.error("[crawl-complete] Pipeline error:", err);
+    const detail = classifyError(err);
+    // Sanitized error message — never exposes stack trace
+    const sanitizedMessage = detail.technicalReason.slice(0, 300);
     await db.analysis
       .update({
         where: { id: analysisId },
-        data: { status: "FAILED", error: String(err).slice(0, 500) },
+        data: {
+          status: "FAILED",
+          error: sanitizedMessage,
+        },
       })
       .catch(console.error);
 
-    return NextResponse.json({ error: "Pipeline failed" }, { status: 500 });
+    return apiFailure(requestId, detail, 500);
   }
 }

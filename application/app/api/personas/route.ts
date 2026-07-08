@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+// app/api/personas/route.ts
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CustomPersonaSchema } from "@/lib/validation/schemas";
 import { Limits } from "@/lib/rate-limit";
+import { getRequestId, apiSuccess, apiFailure } from "@/lib/api/response";
+import { ApiErrors, classifyError } from "@/lib/api/errors";
 import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -53,7 +55,8 @@ Portrait (2–3 sentences, no bullet points, no labels):`;
 	}
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+	const requestId = getRequestId(req);
 	try {
 		const user = await requireAuth();
 
@@ -100,27 +103,28 @@ export async function GET() {
 				(p.metadata as { description?: string } | null)?.description ?? null,
 		});
 
-		return NextResponse.json({
+		return apiSuccess(requestId, {
 			prebuilt: prebuilt.map(withDescription),
 			custom: custom.map(withDescription),
 		});
 	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-		}
-		return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+		const detail = classifyError(err);
+		const status = detail.code === "UNAUTHORIZED" ? 401 : 500;
+		return apiFailure(requestId, detail, status);
 	}
 }
 
 export async function POST(req: Request) {
+	const requestId = getRequestId(req);
 	try {
 		const user = await requireAuth();
 
 		const rl = Limits.personaCrud(user.id);
 		if (!rl.allowed) {
-			return NextResponse.json(
-				{ error: "Too many requests. Slow down." },
-				{ status: 429, headers: { "Retry-After": "60" } },
+			return apiFailure(
+				requestId,
+				ApiErrors.rateLimitExceeded(rl.resetAt - Date.now()),
+				429,
 			);
 		}
 
@@ -129,31 +133,25 @@ export async function POST(req: Request) {
 			where: { ownerId: user.id, isPrebuilt: false },
 		});
 		if (existingCount >= 20) {
-			return NextResponse.json(
-				{ error: "You have reached the maximum of 20 custom personas per account." },
-				{ status: 409 },
-			);
+			return apiFailure(requestId, ApiErrors.personaLimitReached(), 409);
 		}
 
 		const raw = await req.json().catch(() => null);
 		if (!raw) {
-			return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+			return apiFailure(requestId, ApiErrors.invalidJson(), 400);
 		}
 
 		const parsed = CustomPersonaSchema.safeParse(raw);
 		if (!parsed.success) {
-			return NextResponse.json(
-				{
-					error: "Validation failed",
-					details: parsed.error.flatten().fieldErrors,
-				},
-				{ status: 400 },
+			return apiFailure(
+				requestId,
+				ApiErrors.validationFailed(parsed.error.flatten().fieldErrors as Record<string, string[]>),
+				400,
 			);
 		}
 
 		const { name, age, occupation, technicalLevel, goals, frustrations, tags } = parsed.data;
 
-		// Generate AI description in parallel with persona creation check
 		const description = await generatePersonaDescription({
 			name,
 			age,
@@ -179,20 +177,16 @@ export async function POST(req: Request) {
 			},
 		});
 
-		return NextResponse.json(
-			{
-				persona: {
-					...persona,
-					description,
-				},
-			},
-			{ status: 201 },
+		return apiSuccess(
+			requestId,
+			{ persona: { ...persona, description } },
+			undefined,
+			201,
 		);
 	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code === "UNAUTHORIZED") {
-			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-		}
+		const detail = classifyError(err);
+		const status = detail.code === "UNAUTHORIZED" ? 401 : 500;
 		console.error("[POST /api/personas]:", err);
-		return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+		return apiFailure(requestId, detail, status);
 	}
 }

@@ -16,6 +16,9 @@ import {
 } from "lucide-react";
 import { PersonaCard } from "./PersonaCard";
 import { cn } from "@/lib/utils";
+import { AnalysisApi } from "@/lib/api/analyses";
+import { ErrorCard } from "./ErrorCard";
+import { AppError } from "@/lib/api/types";
 
 interface Persona {
 	id: string;
@@ -47,7 +50,7 @@ export function AnalysisWizard({
 	const [deviceType, setDeviceType] = useState<"DESKTOP" | "MOBILE">("DESKTOP");
 	const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [submitError, setSubmitError] = useState<AppError | Error | null>(null);
 
 	const allPersonas = [...prebuiltPersonas, ...customPersonas];
 
@@ -63,26 +66,17 @@ export function AnalysisWizard({
 
 	const handleSubmit = async () => {
 		setLoading(true);
-		setError(null);
+		setSubmitError(null);
 		try {
-			const res = await fetch("/api/analyses", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					url,
-					personaIds: selectedPersonaIds,
-					customPersonas: [],
-					deviceType,
-				}),
+			const result = await AnalysisApi.create({
+				url,
+				personaIds: selectedPersonaIds,
+				customPersonas: [],
+				deviceType,
 			});
-			if (!res.ok) {
-				const data = await res.json();
-				throw new Error(data.error ?? "Failed to start analysis");
-			}
-			const { analysisId } = await res.json();
-			router.push(`/dashboard/analyses/${analysisId}`);
+			router.push(`/dashboard/analyses/${result.analysisId}`);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to start analysis");
+			setSubmitError(err instanceof Error ? err : new Error("Failed to start analysis"));
 			setLoading(false);
 		}
 	};
@@ -435,10 +429,13 @@ export function AnalysisWizard({
 								</div>
 							</div>
 
-							{error && (
-								<p className="mt-4 rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 text-sm text-destructive">
-									{error}
-								</p>
+							{submitError && (
+								<div className="mt-4">
+									<ErrorCard
+										error={submitError}
+										onRetry={() => handleSubmit()}
+									/>
+								</div>
 							)}
 						</motion.div>
 					)}

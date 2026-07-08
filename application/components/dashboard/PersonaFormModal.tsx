@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, Plus, Minus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
+import { ErrorCard } from "./ErrorCard";
 
 interface PersonaFormData {
 	name: string;
@@ -46,24 +47,24 @@ export function PersonaFormModal({
 	});
 	const [tagInput, setTagInput] = useState("");
 	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [submitError, setSubmitError] = useState<Error | null>(null);
 
 	// Reset form when initial (editing target) changes
 	useEffect(() => {
 		setForm({ ...defaultForm, ...initial });
 		setTagInput("");
-		setError(null);
+		setSubmitError(null);
 	}, [initial]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		setError(null);
+		setSubmitError(null);
 		setLoading(true);
 		try {
 			await onSubmit(form);
 			onClose();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Something went wrong");
+			setSubmitError(err instanceof Error ? err : new Error("Something went wrong"));
 		} finally {
 			setLoading(false);
 		}
@@ -254,10 +255,11 @@ export function PersonaFormModal({
 								)}
 							</div>
 
-							{error && (
-								<p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-									{error}
-								</p>
+							{submitError && (
+								<ErrorCard
+									error={submitError}
+									onRetry={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+								/>
 							)}
 
 							<div className="flex gap-3 pt-2">

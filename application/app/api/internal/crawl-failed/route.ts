@@ -39,8 +39,11 @@ export async function POST(req: Request) {
 
 	const { analysisId, error } = parsed.data;
 
-	// Sanitize the error message — never store raw stack traces
-	const sanitizedError = error.replace(/\n.+/gm, "").slice(0, 300);
+	// Sanitise — strip control characters and limit length, but preserve the message
+	const sanitizedError = error
+		.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "") // strip control chars
+		.trim()
+		.slice(0, 400) || "Crawl failed (no reason provided)";
 
 	await db.analysis
 		.updateMany({

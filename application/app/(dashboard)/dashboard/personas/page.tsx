@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
+import { PersonaApi } from "@/lib/api/personas";
 import { PersonaCard } from "@/components/dashboard/PersonaCard";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
@@ -45,13 +46,15 @@ export default function PersonasPage() {
 
   const fetchPersonas = async () => {
     setLoading(true);
-    const res = await fetch("/api/personas");
-    const result = await res.json();
-    if (result.success) {
-      setPrebuilt(result.data.prebuilt ?? []);
-      setCustom(result.data.custom ?? []);
+    try {
+      const data = await PersonaApi.list();
+      setPrebuilt(data.prebuilt ?? []);
+      setCustom(data.custom ?? []);
+    } catch (err) {
+      console.error("Failed to fetch personas:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -61,15 +64,7 @@ export default function PersonasPage() {
   const handleCreate = async (
     formData: Omit<Persona, "id" | "label" | "isPrebuilt" | "description">,
   ) => {
-    const res = await fetch("/api/personas", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      throw new Error(d.error ?? "Failed to create persona");
-    }
+    await PersonaApi.create(formData);
     await fetchPersonas();
   };
 
@@ -77,23 +72,20 @@ export default function PersonasPage() {
     formData: Omit<Persona, "id" | "label" | "isPrebuilt" | "description">,
   ) => {
     if (!editing) return;
-    const res = await fetch(`/api/personas/${editing.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      throw new Error(d.error ?? "Failed to update persona");
-    }
+    await PersonaApi.update(editing.id, formData);
     setEditing(null);
     await fetchPersonas();
   };
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/personas/${id}`, { method: "DELETE" });
-    setCustom((c) => c.filter((p) => p.id !== id));
-    setPendingDelete(null);
+    try {
+      await PersonaApi.delete(id);
+      setCustom((c) => c.filter((p) => p.id !== id));
+    } catch (err) {
+      console.error("Failed to delete persona:", err);
+    } finally {
+      setPendingDelete(null);
+    }
   };
 
   const q = search.toLowerCase().trim();

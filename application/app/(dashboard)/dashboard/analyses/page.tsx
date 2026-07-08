@@ -9,6 +9,7 @@ import { SkeletonCard } from "@/components/dashboard/SkeletonCard";
 import Link from "next/link";
 import { PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AnalysisApi } from "@/lib/api/analyses";
 
 interface Analysis {
 	id: string;
@@ -56,10 +57,14 @@ export default function AnalysesPage() {
 	useEffect(() => {
 		(async () => {
 			setLoading(true);
-			const res = await fetch("/api/analyses");
-			const data = await res.json();
-			setAll(data.analyses ?? []);
-			setLoading(false);
+			try {
+				const data = await AnalysisApi.list();
+				setAll(data.analyses ?? []);
+			} catch (err) {
+				console.error("Failed to load analyses:", err);
+			} finally {
+				setLoading(false);
+			}
 		})();
 	}, []);
 

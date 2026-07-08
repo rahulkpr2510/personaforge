@@ -75,12 +75,13 @@ export interface AnalysisSummary {
   id: string;
   url: string;
   normalizedHost: string;
-  status: string;
-  deviceType: string;
-  overallSentiment: string | null;
+  status: "PENDING" | "CRAWLING" | "ANALYZING" | "COMPLETED" | "FAILED";
+  deviceType: "DESKTOP" | "MOBILE";
+  overallSentiment: "POSITIVE" | "NEUTRAL" | "NEGATIVE" | null;
   overallFrictionScore: number | null;
   createdAt: string;
   completedAt: string | null;
+  error?: string | null;
   _count: { pages: number; personas: number };
   focusGroup: { id: string } | null;
 }
@@ -121,7 +122,7 @@ export interface PersonaData {
   name: string;
   age: number;
   occupation: string;
-  technicalLevel: string;
+  technicalLevel: "LOW" | "MEDIUM" | "HIGH";
   goals: string;
   frustrations: string;
   tags: string[];

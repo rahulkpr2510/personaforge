@@ -1,4 +1,3 @@
-// app/api/personas/route.ts
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { CustomPersonaSchema } from "@/lib/validation/schemas";
@@ -6,13 +5,8 @@ import { Limits } from "@/lib/rate-limit";
 import { getRequestId, apiSuccess, apiFailure } from "@/lib/api/response";
 import { ApiErrors, classifyError } from "@/lib/api/errors";
 import Groq from "groq-sdk";
+import { getAIConfig } from "@/lib/config/ai-providers";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
-
-/**
- * Generates a 2–3 sentence narrative description of a custom persona using Groq.
- * Returns null on any failure — persona creation is never blocked by this.
- */
 async function generatePersonaDescription(data: {
 	name: string;
 	age: number;
@@ -22,6 +16,13 @@ async function generatePersonaDescription(data: {
 	frustrations: string;
 }): Promise<string | null> {
 	try {
+		const cfg = getAIConfig();
+		// Use the configured text model (respects ai-providers.ts overrides)
+		const model = cfg.text.providers[cfg.text.primary].model;
+		// Create the client here so it always uses the current GROQ_API_KEY,
+		// not one captured at module initialisation time.
+		const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+
 		const techMap: Record<string, string> = {
 			LOW: "non-technical (avoids complexity, prefers simple intuitive interfaces)",
 			MEDIUM: "moderately technical (comfortable with standard digital tools)",
@@ -41,7 +42,7 @@ Frustrations: ${data.frustrations}
 Portrait (2–3 sentences, no bullet points, no labels):`;
 
 		const completion = await groq.chat.completions.create({
-			model: "llama-3.1-8b-instant",
+			model,
 			messages: [{ role: "user", content: prompt }],
 			max_tokens: 200,
 			temperature: 0.7,

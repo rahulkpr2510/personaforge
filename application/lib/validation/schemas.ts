@@ -112,47 +112,4 @@ export const CreateAnalysisSchema = z
 
 export type CreateAnalysisInput = z.infer<typeof CreateAnalysisSchema>;
 
-// ─── Internal crawl-complete payload ─────────────────────────────────────────
 
-const PageMetricsSchema = z.object({
-  formsCount: z.number().int().min(0).max(1000),
-  buttonsCount: z.number().int().min(0).max(5000),
-  linksCount: z.number().int().min(0).max(10000),
-  textLength: z.number().int().min(0),
-  hasAuthForm: z.boolean(),
-  primaryActionLabel: z.string().max(200).nullable(),
-  navStructure: z
-    .array(
-      z.object({
-        text: z.string().max(200).optional(),
-        href: z.string().max(2048),
-      }),
-    )
-    .max(50),
-});
-
-const CrawledPageSchema = z.object({
-  url: z.string().url().max(2048),
-  depth: z.number().int().min(0).max(10),
-  title: z.string().max(500),
-  content: z.string().max(10000),
-  metrics: PageMetricsSchema,
-  links: z.array(z.string().url().max(2048)).max(100),
-  screenshots: z
-    .array(
-      z.object({
-        cdnUrl: z.string().url().max(2048),
-        type: z.enum(["FULL_PAGE", "VIEWPORT"]),
-      }),
-    )
-    .max(4),
-});
-
-const CrawlCompletePayloadSchema = z.object({
-  analysisId: z.string().cuid(),
-  result: z.object({
-    pages: z.array(CrawledPageSchema).min(1).max(20),
-  }),
-});
-
-export type CrawlCompletePayload = z.infer<typeof CrawlCompletePayloadSchema>;

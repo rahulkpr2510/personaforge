@@ -3,17 +3,32 @@ import { requireAuth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { MobileNav } from "@/components/dashboard/MobileNav";
-import { SidebarItem, SidebarSection } from "@/components/dashboard/SidebarItem";
+import {
+	SidebarItem,
+	SidebarSection,
+} from "@/components/dashboard/SidebarItem";
 
 import { type IconName } from "@/components/dashboard/Icon";
 import Link from "next/link";
+import { Metadata } from "next";
 
-const adminNavItems: { href: string; icon: IconName; label: string; exact?: boolean }[] = [
+const adminNavItems: {
+	href: string;
+	icon: IconName;
+	label: string;
+	exact?: boolean;
+}[] = [
 	{ href: "/admin", icon: "LayoutDashboard", label: "Overview", exact: true },
 	{ href: "/admin/users", icon: "Users", label: "Users" },
 	{ href: "/admin/analyses", icon: "FlaskConical", label: "Analyses" },
 	{ href: "/admin/personas", icon: "UserCog", label: "Personas" },
 ];
+
+export const metadata: Metadata = {
+	icons: {
+		icon: "/favicons/favicon.ico",
+	},
+};
 
 export default async function AdminLayout({
 	children,
@@ -54,7 +69,6 @@ export default async function AdminLayout({
 						</div>
 					</div>
 				}
-
 			>
 				<SidebarSection label="Admin Panel" />
 				{adminNavItems.map((item) => (

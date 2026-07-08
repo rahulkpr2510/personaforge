@@ -161,51 +161,6 @@ export function ErrorCard({
 				)}
 			</div>
 
-			{/* Developer details (expandable) */}
-			{(technicalReason || requestId) && (
-				<div className="ml-8">
-					<button
-						onClick={() => setShowDetails((v) => !v)}
-						className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-					>
-						{showDetails ? (
-							<ChevronUp className="h-3 w-3" />
-						) : (
-							<ChevronDown className="h-3 w-3" />
-						)}
-						Developer Details
-					</button>
-
-					{showDetails && (
-						<div className="mt-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 space-y-1 font-mono text-[11px] text-muted-foreground">
-							{requestId && (
-								<div className="flex gap-2">
-									<span className="text-foreground/50 shrink-0">
-										Request ID
-									</span>
-									<span className="text-foreground/80 break-all">
-										{requestId}
-									</span>
-								</div>
-							)}
-							{category && (
-								<div className="flex gap-2">
-									<span className="text-foreground/50 shrink-0">Category</span>
-									<span className="text-foreground/80">{category}</span>
-								</div>
-							)}
-							{technicalReason && (
-								<div className="flex gap-2">
-									<span className="text-foreground/50 shrink-0">Technical</span>
-									<span className="text-foreground/80 wrap-break-word">
-										{technicalReason}
-									</span>
-								</div>
-							)}
-						</div>
-					)}
-				</div>
-			)}
 		</div>
 	);
 }

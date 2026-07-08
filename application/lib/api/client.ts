@@ -7,7 +7,18 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { AppError, ErrorCategory, type ApiFailureResponse, type ApiSuccessResponse } from "./types";
 import { shouldRetry, calcRetryDelay, sleep, DEFAULT_RETRY_CONFIG } from "./retry";
-import { randomUUID } from "crypto";
+// Helper function to generate UUIDs in the browser without Node dependencies.
+function generateUUID(): string {
+  if (typeof window !== "undefined" && window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  // Fallback for non-secure contexts / environments where randomUUID is not available
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 // ── Timeout constants (ms) ──────────────────────────────────────────────────
 
@@ -47,7 +58,7 @@ const api = axios.create({
 // Attaches tracing headers to every outgoing request.
 
 api.interceptors.request.use((config: ExtendedAxiosRequestConfig) => {
-  const requestId = randomUUID();
+  const requestId = generateUUID();
   config._requestId = requestId;
   config._retryCount = config._retryCount ?? 0;
   config._startTime = config._startTime ?? Date.now();
